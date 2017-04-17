@@ -162,7 +162,7 @@ vec4 raymarchNoise(vec3 ro, vec3 rd) {
 		// Camera inside object
 		if ((intersectionMin < 0 && intersectionMax > 0)) {	
 			vec3 p = ro + rd;
-			while (count <= max_steps) {
+			while (count < max_steps) {
 				p += rd * t;
 				// Found noise
 				if (noiseHit(p)) {
