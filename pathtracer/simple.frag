@@ -23,10 +23,10 @@ smooth in vec2 uv; // image plane (-1,1)
 float intersectionMin = -1;
 float intersectionMax = -1;
 
-float max_steps = 30.0f;
-float step_size = 0.01f;
+float max_steps = 102.0f;
+float step_size = 0.05f;
 float f = 1.67f; //focal length
-float texture_ISO_threshold = 0.1f;
+float texture_ISO_threshold = 0.4f;
 float alpha = 0.005;
 vec3 box_size = vec3(aabb_noise_max - aabb_noise_min);
 layout (location = 0) out vec4 fragmentColor;
@@ -99,8 +99,8 @@ float signedDistanceBox(vec3 p, vec3 b) {
 }
 
 bool noiseHit(vec3 p) {
-	//vec3 p_tex = p + vec3(0.5);
-	return fbm(p) > 0.22; // texture_ISO_threshold;
+	vec3 p_tex = p + vec3(0.5);
+	return fbm(p) > texture_ISO_threshold;
 }
 
 //Checks whether our ray intersects the provided AABB
@@ -112,6 +112,7 @@ bool intersection(vec3 origin, vec3 direction) {
 		tmin = (aabb_noise_min.x - origin.x) / direction.x;
 		tmax = (aabb_noise_max.x - origin.x) / direction.x;
 	}
+
 	else {
 		tmax = (aabb_noise_min.x - origin.x) / direction.x;
 		tmin = (aabb_noise_max.x - origin.x) / direction.x;
@@ -157,13 +158,15 @@ vec4 raymarchNoise(vec3 ro, vec3 rd) {
 	float t = 0;
 	float count = 0;
 	if (intersection(ro, rd)) {
-		//we use intersectionMin and Max.
-		
 		// Camera inside object
 		if ((intersectionMin < 0 && intersectionMax > 0)) {	
 			vec3 p = ro + rd;
 			while (count < max_steps) {
 				p += rd * t;
+				// Check if outside of box
+				if (length(p) - length(ro) > intersectionMax) {
+					return color;
+				}
 				// Found noise
 				if (noiseHit(p)) {
 					return vec4(
@@ -181,6 +184,10 @@ vec4 raymarchNoise(vec3 ro, vec3 rd) {
 			vec3 p = ro + rd * intersectionMin;
 			while (count <= max_steps) {
 				p += rd * t;
+				// Check if outside of box
+				if (length(p) - length(ro) > intersectionMax) {
+					return color;
+				}
 				if (noiseHit(p)) {
 					return vec4( 
 					1 - count / max_steps,
