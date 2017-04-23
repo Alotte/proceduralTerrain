@@ -38,7 +38,7 @@ vec3 forward	= vec3(0, 0, 1);
 // Parameters for the raymarcher
 float ground_threshold = 0.5f;
 float count_check = 0.0f;
-float max_steps = 100.0f;
+float max_steps = 1000.0f;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Load shaders, environment maps, models and so on
@@ -253,7 +253,7 @@ void gui() {
 	/////////////////////////////////////////////////////////////////////////////
 	if (ImGui::CollapsingHeader("Pathtracer", "pathtracer_ch", true, true))
 	{
-		ImGui::SliderFloat("Ground Threshold", &ground_threshold, 0.0f, 1.0f);
+		ImGui::SliderFloat("Ground Threshold", &ground_threshold, 0.01f, 1.0f);
 		ImGui::SliderFloat("Noise Val at Count#", &count_check, 0.0f, max_steps);
 	}
 	// Render the GUI.

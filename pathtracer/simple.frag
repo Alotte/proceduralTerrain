@@ -49,6 +49,8 @@ float hash (in vec3 p) {
     return fract(sin(dot(p, vec3(12.9898,78.233, 63.304))) * 43758.5453123);
 }
 
+
+
 //Noise
 float noise(in vec3 p) {
 	vec3 i = floor(p); // floored.
@@ -72,6 +74,7 @@ float noise(in vec3 p) {
     // based on https://www.shadertoy.com/view/4dS3Wd
     // Interpolate hashes and fade to get a noise value.
     // Unsure whether this will yield values between 0-1.
+
     return mix(mix(mix( aaa, aab, u.x),
                    mix( aba, abb, u.x), u.y),
                mix(mix( baa, bab, u.x),
@@ -82,7 +85,7 @@ float noise(in vec3 p) {
 float fbm(vec3 p) {
 	float value = 0.0f;
 	for (int i = 0; i < octaves; i++) {
-		value += amplitude * noise(frequency*p);
+		value += amplitude * noise(frequency * p);
 		frequency *= lacunarity;
 		amplitude *= gain;
 	}
@@ -189,33 +192,20 @@ vec4 raymarchNoise(vec3 ro, vec3 rd) {
 		// 	}
 
 		// // Camera not inside the object
-		// else {				
+		// else {	
+		float t = 0;			
 			vec3 p = ro + rd * intersectionMin;
 			while (count <= max_steps) {
-				p += rd * step_size;
 
-				// float lenP = length(p);
-				// if (lenP - length(ro) > intersectionMax) {
-				// 	return vec4(0,0,1,1);
-				// }
-				float val = fbm(p);
-					
-				if (count == floor(count_check)) {
-					return (vec4(val, 0,0,1));
-					// return vec4( 
-					// 		(count + 0.0f/ max_steps),
-					// 		(count + 0.0f / max_steps),
-					// 		(count +0.0f / max_steps),
-					// 		1.0f); 
-					// if (val > texture_ISO_threshold) {
-					// 	return (vec4(val, 0,0,1));
-					// 	// return vec4( 
-					// 	// 	1 - (count / max_steps),
-					// 	// 	1 - (count / max_steps),
-					// 	// 	1 - (count / max_steps),
-					// 	// 	1.0f); 
-					// }					
-				}
+				if (p.y < ground_threshold) return vec4(0);
+				// Check if outside of box
+				// if (noiseHit(p)) {
+				// 	return vec4( 
+				// 	1 - count / max_steps,
+				// 	1 - count / max_steps,
+				// 	1 - count / max_steps,
+				// 	1.0f); }
+				p += rd * step_size;
 				count++;
 			}
 		// }	
@@ -249,7 +239,7 @@ vec4 raymarchSphere(vec3 ro, vec3 rd) {
 						1 - count / max_steps,
 						1 - count / max_steps,
 						1.0f); }
-				t += step_size;
+				p += rd * step_size;
 				count++; 
 			}
 			return color;
