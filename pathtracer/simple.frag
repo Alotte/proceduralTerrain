@@ -28,7 +28,8 @@ float texture_ISO_threshold = 0.3f;
 float alpha = 0.005;
 //UV-coordinates
 smooth in vec2 uv; // image plane (-1,1)
-
+float intersectionMin = 0;
+float intersectionMax = 0;
 vec3 box_size = vec3(aabb_noise_max - aabb_noise_min);
 layout (location = 0) out vec4 fragmentColor;
 
@@ -103,7 +104,7 @@ float signedDistanceBox(vec3 p, vec3 b) {
 }
 
 //Checks whether our ray intersects the provided AABB
-bool intersection(vec3 origin, vec3 direction, out float intersectionMin, out float intersectionMax) {
+bool intersection(vec3 origin, vec3 direction) {
 	//find x-plane intersect
 	float tmin, tmax, tymin, tymax, tzmin, tzmax;
 
@@ -162,55 +163,19 @@ vec4 raymarchNoise(vec3 ro, vec3 rd) {
 	vec4 color = vec4(0, 0.5f, 0.5f, 1);
 
 	//Distance max and min along ray, intersection test:
-	float intersectionMin;
-	float intersectionMax;
 
-	if (intersection(ro,rd, intersectionMin, intersectionMax)) {
-		float count = 0;
+	if (intersection(ro,rd)) {
+		float count = 0;			
+		vec3 p = ro + rd * intersectionMin;
 
-		// //Camera inside object
-		// if (intersectionMin < 0) {	
-		// 	vec3 p = ro + rd;
-		// 	while (count < max_steps) {
-		// 		p += rd * step_size;
-		// 		float val = fbm(p);	
+		while (count <= max_steps) {
 
-		// 		if (count == floor(count_check)) {
-		// 			return (vec4(val, 0,0,1));
+			if (p.y < ground_threshold) return vec4(0);
 
-		// 			// // Found noise
-		// 			// if (noiseHit(p)) {
-		// 			// 	return vec4(
-		// 			// 	1 - (count / max_steps),
-		// 			// 	1 - (count / max_steps),
-		// 			// 	1 - (count / max_steps),
-		// 			// 		1.0f); 
-		// 			// }
-					
-		// 		}
-		// 		count++; 
-		// 	}
-
-		// // Camera not inside the object
-		// else {	
-		float t = 0;			
-			vec3 p = ro + rd * intersectionMin;
-			while (count <= max_steps) {
-
-				if (p.y < ground_threshold) return vec4(0);
-				// Check if outside of box
-				// if (noiseHit(p)) {
-				// 	return vec4( 
-				// 	1 - count / max_steps,
-				// 	1 - count / max_steps,
-				// 	1 - count / max_steps,
-				// 	1.0f); }
-				p += rd * step_size;
-				count++;
-			}
-		// }	
-
-	}
+			p += rd * step_size;
+			count++;
+		}
+}
 	
 	return color;
 }
@@ -222,7 +187,7 @@ vec4 raymarchSphere(vec3 ro, vec3 rd) {
 	float intersectionMin;
 	float intersectionMax;
 
-	if (intersection(ro,rd, intersectionMin, intersectionMax)) {
+	if (intersection(ro,rd)) {
 		vec3 end = ro + rd * intersectionMax; 
 		
 		// Camera inside object
