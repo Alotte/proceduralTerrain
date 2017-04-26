@@ -49,32 +49,7 @@ void initialize()
 	// Load shader program
 	///////////////////////////////////////////////////////////////////////////
 	shaderProgram = labhelper::loadShaderProgram("simple.vert", "simple.frag");
-	///////////////////////////////////////////////////////////////////////////
-	// Generate procedural texture
-	///////////////////////////////////////////////////////////////////////////
-	pathtracer::resizeTexture(100, 100, 100); // sample 100x100x100 values 
-	pathtracer::createNoiseIsoTexture(); // create model
-	/*glClearColor(0.0, 0.0, 0.0, 0.0);
-	glShadeModel(GL_FLAT);
-	glEnable(GL_DEPTH_TEST);
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);*/
-	glGenTextures(1, &noise_texture_3D_id);
-	glActiveTexture(GL_TEXTURE0); // SET TEXTURE LOCATION TO 1
-	glBindTexture(GL_TEXTURE_3D, noise_texture_3D_id);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-	//save the texture
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB8,
-		pathtracer::noise_texture_3D.res_z,
-		pathtracer::noise_texture_3D.res_y,
-		pathtracer::noise_texture_3D.res_x,
-		0, GL_RGB, GL_FLOAT,
-		pathtracer::noise_texture_3D.getPointer());
-	
 	//Add a sweet sweet bounding box for the noise.
 	glUseProgram(shaderProgram);
 	labhelper::setUniformSlow(shaderProgram, "aabb_noise_min", pathtracer::bounding_box_aa.min_corner);//vec3
@@ -254,7 +229,7 @@ void gui() {
 	if (ImGui::CollapsingHeader("Pathtracer", "pathtracer_ch", true, true))
 	{
 		ImGui::SliderFloat("Ground Threshold", &ground_threshold, 0.01f, 1.0f);
-		ImGui::SliderFloat("Noise Val at Count#", &count_check, 0.0f, max_steps);
+		ImGui::SliderFloat("Noise Val at Count#", &count_check, 0.0f, 100);
 	}
 	// Render the GUI.
 	ImGui::Render();
