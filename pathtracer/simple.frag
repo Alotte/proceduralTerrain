@@ -104,14 +104,7 @@ return value;
 
 
 void main() {
-    //Setup.
-    vec2 iResolution = vec2(resolution_x, resolution_y);
-    vec2 p = fragCoord / iResolution - 0.5;
-	p.x *= iResolution.x / iResolution.y;
-	vec2 um = iMouse / iResolution - 0.5;
-	um.x *= iResolution.x / iResolution.y;
-
-    // Camera.
+     // Camera.
 	vec3 ro = eye;
 	vec3 rd =normalize(forward * f + right*fragCoord.x *aspect_ratio + up*fragCoord.y);
     // ro.x += um.x;
