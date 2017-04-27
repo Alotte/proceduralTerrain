@@ -32,6 +32,64 @@ float intersectionMax = 0;
 vec3 box_size = vec3(aabb_noise_max - aabb_noise_min);
 layout (location = 0) out vec4 fragmentColor;
 
+
+/*//////////////////////////////////////////////////////
+///// Noise calculation
+*///////////////////////////////////////////////////////
+
+//Properties
+const int octaves = 6;
+float lacunarity = 2.0f;
+float gain = 0.5f;
+// Initial values
+float amplitude = 0.5f;
+float frequency = 1.0f;
+
+float hash_3 (in vec3 p) { 
+    return fract(sin(dot(p, vec3(12.9898,78.233, 63.304))) * 43758.5453123);
+}
+
+//Noise
+float noise_3(in vec3 p) {
+	vec3 i = floor(p); // floored.
+	vec3 f = fract(p); //fractional part of argument.
+
+	//Hash corners of a 3D tile
+	float aaa, aba, aab, abb, baa, bba, bab, bbb;
+	aaa = hash_3(i);
+	aab = hash_3(i + vec3(1.0f, 0.0f, 0.0f));
+	aba = hash_3(i + vec3(0.0f, 1.0f, 0.0f));
+	abb = hash_3(i + vec3(1.0f, 1.0f, 0.0f));
+	baa = hash_3(i + vec3(0.0f, 0.0f, 1.0f));
+	bab = hash_3(i + vec3(1.0f, 0.0f, 1.0f));
+	bba = hash_3(i + vec3(0.0f, 1.0f, 1.0f));
+	bbb = hash_3(i + vec3(1.0f, 1.0f, 1.0f));
+
+	// Fade function 
+	vec3 u = f * f * f *( f * (f * 6 - 15) + 10); 
+
+	float x1, x2, y1, y2;
+    // based on https://www.shadertoy.com/view/4dS3Wd
+    // Interpolate hashes and fade to get a noise value.
+    // Unsure whether this will yield values between 0-1.
+
+    return mix(mix(mix( aaa, aab, u.x),
+                   mix( aba, abb, u.x), u.y),
+               mix(mix( baa, bab, u.x),
+                   mix( bba, bbb, u.x), u.y), u.z);	
+}
+
+//Loop of octaves
+float fbm_3(vec3 p) {
+	float value = 0.0f;
+	for (int i = 0; i < octaves; i++) {
+		value += amplitude * noise_3(frequency * p);
+		frequency *= lacunarity;
+		amplitude *= gain;
+	}
+	return value;
+}
+
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 // Fragment shader code for testing purposes.
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -82,19 +140,20 @@ float noise( in vec3 x ) {
 
 
 float fbm_4( in vec3 x ) {
-    float f = 2.0;
-    float s = 0.5;
-    float a = 0.0;
-    float b = 0.5;
+
+    float frequency = 2.0;
+    float gain = 0.5;
+    float amplitude = 0.5;
+    float value = 0.0;
     
-    for( int i=0; i<4; i++ ) {
-        float n = noise(x);
-        a += b * n;
-        b *= s;
-        x = f * m3 * x;
+    for( int i=0; i < octaves; i++ ) {
+        float noise = noise(x);
+        value += amplitude * noise;
+        amplitude *= gain;
+        x = frequency * m3 * x;
     }
 
-return a;
+return value;
 }
 
 
