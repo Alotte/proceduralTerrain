@@ -2,53 +2,49 @@
 
 // required by GLSL spec Sect 4.5.3 (though nvidia does not, amd does)
 precision highp float;
+
+//Final color
+layout (location = 0) out vec4 fragmentColor;
+
 /*//////////////////////////////////////////////////////
 /////Input from main
 *///////////////////////////////////////////////////////
-uniform vec3 aabb_noise_max;
-uniform vec3 aabb_noise_min;
-// Camera Position
+// Camera Position-----------------------------
 uniform vec3 eye;
-// Camera
+
+// Camera-----------------------------
 uniform vec3 right;
 uniform vec3 up;
 uniform vec3 forward;
-//Screen
+
+//Screen-----------------------------
 uniform float aspect_ratio;
 uniform float resolution_x;
 uniform float resolution_y;
-//Raymarcher parameters
+
+//UV-coordinates-----------------------------
+in vec2 fragCoord; // image plane (-1,1)
+
+//Raymarcher parameters----------------------
 uniform float ground_threshold;
 uniform float max_steps;
 uniform float count_check;
 float step_size = 1.0f/max_steps;
 float f = 1.67f; //focal length
-float texture_ISO_threshold = 0.3f;
-float alpha = 0.005;
-//UV-coordinates
-in vec2 fragCoord; // image plane (-1,1)
-float intersectionMin = 0;
-float intersectionMax = 0;
-vec3 box_size = vec3(aabb_noise_max - aabb_noise_min);
-layout (location = 0) out vec4 fragmentColor;
 
-
-/*//////////////////////////////////////////////////////
-///// Noise calculation
-*///////////////////////////////////////////////////////
-
-//Properties
+//Noise Properties-----------------------------
 const int octaves = 6;
-
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-// Fragment shader code for testing purposes.
-//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 const int ITR = 100;
 const float FAR = 5.0;
 const float dt = FAR/float(ITR);
 const mat3 m3  = mat3( 0.00,  0.80,  0.60,
                       -0.80,  0.36, -0.48,
                       -0.60, -0.48,  0.64 );
+
+
+/*//////////////////////////////////////////////////////
+///// Noise calculation
+*///////////////////////////////////////////////////////
 
 float hash1( float n ) {
     return fract( n * 17.0 * fract( n * 0.3183099 ) );
@@ -58,11 +54,13 @@ float noise( in vec3 x ) {
     vec3 p = floor(x);
     vec3 w = fract(x);
     
-    //Fade function
+    //Fade function to make transition between gradients smooth.
     vec3 u = w * w * w * (w * (w * 6.0 - 15.0) + 10.0);
     
+    //Compute 1D value for the hash for each corner of the box.
     float n = p.x + 317.0 * p.y + 157.0 * p.z;
     
+    // Hash offseted 'box' coordinates (0,1).
     float a = hash1(n + 0.0);
     float b = hash1(n + 1.0);
     float c = hash1(n + 317.0);
@@ -72,6 +70,7 @@ float noise( in vec3 x ) {
     float g = hash1(n + 474.0);
     float h = hash1(n + 475.0);
 
+    //Gradients (-8,8) theoretical max min
     float k0 =   a;
     float k1 =   b - a;
     float k2 =   c - a;
@@ -81,9 +80,17 @@ float noise( in vec3 x ) {
     float k6 =   a - b - e + f;
     float k7 = - a + b + c - d + e - f - g + h;
 
-    return -1.0 + 2.0 * (k0 + k1 * u.x + k2 * u.y + k3 * u.z + k4 * u.x * u.y + k5 * u.y * u.z + k6 * u.z * u.x + k7 * u.x * u.y * u.z);
+   //Use gradients and fade function to create the noise value. (-1,1).
+   //Not entirely sure of this black magic yet.
+    return -1.0 + 2.0 * (k0 + 
+    					k1 * u.x + 
+    					k2 * u.y + 
+    					k3 * u.z + 
+    					k4 * u.x * u.y + 
+    					k5 * u.y * u.z + 
+    					k6 * u.z * u.x + 
+    					k7 * u.x * u.y * u.z);
 }
-
 
 float fbm_4( in vec3 x ) {
 
@@ -101,7 +108,6 @@ float fbm_4( in vec3 x ) {
 
 return value;
 }
-
 
 void main() {
      // Camera.
@@ -142,8 +148,7 @@ void main() {
 	}
 	    
     // Shade.
-	fragmentColor = vec4(vec3(ctr / float(ITR)),1.0);
-	// fragmentColor = vec4(fbm_4(vec3(fragCoord.x, fragCoord.y, 0)), 0 ,0, 1);
+	fragmentColor = vec4(vec3(ctr / float(ITR)), 1.0);
 }
 
 
