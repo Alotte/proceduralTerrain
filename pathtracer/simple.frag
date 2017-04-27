@@ -39,63 +39,10 @@ layout (location = 0) out vec4 fragmentColor;
 
 //Properties
 const int octaves = 6;
-float lacunarity = 2.0f;
-float gain = 0.5f;
-// Initial values
-float amplitude = 0.5f;
-float frequency = 1.0f;
-
-float hash_3 (in vec3 p) { 
-    return fract(sin(dot(p, vec3(12.9898,78.233, 63.304))) * 43758.5453123);
-}
-
-//Noise
-float noise_3(in vec3 p) {
-	vec3 i = floor(p); // floored.
-	vec3 f = fract(p); //fractional part of argument.
-
-	//Hash corners of a 3D tile
-	float aaa, aba, aab, abb, baa, bba, bab, bbb;
-	aaa = hash_3(i);
-	aab = hash_3(i + vec3(1.0f, 0.0f, 0.0f));
-	aba = hash_3(i + vec3(0.0f, 1.0f, 0.0f));
-	abb = hash_3(i + vec3(1.0f, 1.0f, 0.0f));
-	baa = hash_3(i + vec3(0.0f, 0.0f, 1.0f));
-	bab = hash_3(i + vec3(1.0f, 0.0f, 1.0f));
-	bba = hash_3(i + vec3(0.0f, 1.0f, 1.0f));
-	bbb = hash_3(i + vec3(1.0f, 1.0f, 1.0f));
-
-	// Fade function 
-	vec3 u = f * f * f *( f * (f * 6 - 15) + 10); 
-
-	float x1, x2, y1, y2;
-    // based on https://www.shadertoy.com/view/4dS3Wd
-    // Interpolate hashes and fade to get a noise value.
-    // Unsure whether this will yield values between 0-1.
-
-    return mix(mix(mix( aaa, aab, u.x),
-                   mix( aba, abb, u.x), u.y),
-               mix(mix( baa, bab, u.x),
-                   mix( bba, bbb, u.x), u.y), u.z);	
-}
-
-//Loop of octaves
-float fbm_3(vec3 p) {
-	float value = 0.0f;
-	for (int i = 0; i < octaves; i++) {
-		value += amplitude * noise_3(frequency * p);
-		frequency *= lacunarity;
-		amplitude *= gain;
-	}
-	return value;
-}
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 // Fragment shader code for testing purposes.
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-// Constants.
-vec2 iMouse = vec2(resolution_y / 2.0f, resolution_x/2.0f);
 const int ITR = 100;
 const float FAR = 5.0;
 const float dt = FAR/float(ITR);
@@ -106,7 +53,6 @@ const mat3 m3  = mat3( 0.00,  0.80,  0.60,
 float hash1( float n ) {
     return fract( n * 17.0 * fract( n * 0.3183099 ) );
 }
-
 
 float noise( in vec3 x ) {
     vec3 p = floor(x);
@@ -164,7 +110,6 @@ void main() {
 	p.x *= iResolution.x / iResolution.y;
 	vec2 um = iMouse / iResolution - 0.5;
 	um.x *= iResolution.x / iResolution.y;
-
 
     // Camera.
 	vec3 ro = eye;
