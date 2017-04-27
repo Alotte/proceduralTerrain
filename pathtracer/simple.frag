@@ -50,13 +50,16 @@ float hash1( float n ) {
     return fract( n * 17.0 * fract( n * 0.3183099 ) );
 }
 
-float noise( in vec3 x ) {
+//Returns the 3D noise value and its three derivatives.
+vec4 noise( in vec3 x ) {
     vec3 p = floor(x);
     vec3 w = fract(x);
     
     //Fade function to make transition between gradients smooth.
     vec3 u = w * w * w * (w * (w * 6.0 - 15.0) + 10.0);
-    
+    //Derivative of the fade function.
+    vec3 du = 30.0 * w * w * (w * (w - 2.0) + 1.0);
+
     //Compute 1D value for the hash for each corner of the box.
     float n = p.x + 317.0 * p.y + 157.0 * p.z;
     
@@ -82,31 +85,52 @@ float noise( in vec3 x ) {
 
    //Use gradients and fade function to create the noise value. (-1,1).
    //Not entirely sure of this black magic yet.
-    return -1.0 + 2.0 * (k0 + 
+
+    return vec4( -1.0 + 2.0 *(k0 + 
     					k1 * u.x + 
     					k2 * u.y + 
     					k3 * u.z + 
     					k4 * u.x * u.y + 
     					k5 * u.y * u.z + 
     					k6 * u.z * u.x + 
-    					k7 * u.x * u.y * u.z);
+    					k7 * u.x * u.y * u.z), 
+   					// Analytical noise derivative at given point.
+                      2.0 * du * vec3( k1 + k4 * u.y + k6 * u.z + k7 * u.y * u.z,
+                                      k2 + k5 * u.z + k4 * u.x + k7 * u.z * u.x,
+                                      k3 + k6 * u.x + k5 * u.y + k7 * u.x *u.y ) );
+    // return -1.0 + 2.0 * (k0 + 
+    // 					k1 * u.x + 
+    // 					k2 * u.y + 
+    // 					k3 * u.z + 
+    // 					k4 * u.x * u.y + 
+    // 					k5 * u.y * u.z + 
+    // 					k6 * u.z * u.x + 
+    // 					k7 * u.x * u.y * u.z);
 }
 
-float fbm_4( in vec3 x ) {
+// Returns the fractal brownian motion noise and its three derivatives.
+vec4 fbm_4( in vec3 x ) {
 
     float frequency = 2.0;
     float gain = 0.5;
-    float amplitude = 0.5;
     float value = 0.0;
-    
+    float amplitude = 0.5;
+    vec3 derivative = vec3(0.0);
+    mat3  m = mat3(1.0,0.0,0.0,
+                   0.0,1.0,0.0,
+                   0.0,0.0,1.0);
+
     for( int i=0; i < octaves; i++ ) {
-        float noise = noise(x);
-        value += amplitude * noise;
+        vec4 noise = noise(x);
+        value += amplitude * noise.x;
+        derivative += amplitude * m * noise.yzw;
         amplitude *= gain;
         x = frequency * m3 * x;
+        //uses another matrix than m3 but I'm not sure which.->
+        m = frequency * m3 * m; 
     }
 
-return value;
+return vec4(value,derivative);
 }
 
 void main() {
@@ -123,8 +147,9 @@ void main() {
         // New position.
         vec3 pos = ro + t * rd;
         // Calculate sdf.
-        
-        float sdf_noise  = fbm_4(pos) * 0.5 + 0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
+        // Find fbm and derivatives:
+        vec4 fbm_noise = fbm_4(pos);
+        float sdf_noise  = fbm_noise.x * 0.5 + 0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
         float sdf_floor  = pos.y + 0.6;
         float sdf_val    = sdf_floor + sdf_noise;
         //float sdf_sphere = length(vec3(0.0) - pos); // Radius 1, center at (0,0,0)
