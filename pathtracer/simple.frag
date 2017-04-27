@@ -2,219 +2,151 @@
 
 // required by GLSL spec Sect 4.5.3 (though nvidia does not, amd does)
 precision highp float;
-
-//Our delicious uniforms that enable taking over the world.
-uniform vec3 aabb_noise_max;
-uniform vec3 aabb_noise_min;
-
-// Camera Position
-uniform vec3 eye;
-
-// Camera Direction Matrix
-uniform vec3 right;
-uniform vec3 up;
-uniform vec3 forward;
-
-uniform float aspect_ratio;
-uniform float resolution_x;
-uniform float resolution_y;
-//UV-coordinates
-smooth in vec2 uv; // image plane (-1,1)
-//yields our beautiful u-v coordinates?
-
-float intersectionMin = -1;
-float intersectionMax = -1;
-
-float max_steps = 30.0f;
-float step_size = 0.01f;
-float f = 1.67f; //focal length
-float texture_ISO_threshold = 0.1f;
-float alpha = 0.005;
-vec3 box_size = vec3(aabb_noise_max - aabb_noise_min);
 /*//////////////////////////////////////////////////////
 /////Input from main
 *///////////////////////////////////////////////////////
-
+uniform vec3 aabb_noise_max;
+uniform vec3 aabb_noise_min;
+// Camera Position
+uniform vec3 eye;
+// Camera
+uniform vec3 right;
+uniform vec3 up;
+uniform vec3 forward;
+//Screen
+uniform float aspect_ratio;
+uniform float resolution_x;
+uniform float resolution_y;
+//Raymarcher parameters
+uniform float ground_threshold;
+uniform float max_steps;
+uniform float count_check;
+float step_size = 1.0f/max_steps;
+float f = 1.67f; //focal length
+float texture_ISO_threshold = 0.3f;
+float alpha = 0.005;
+//UV-coordinates
+in vec2 fragCoord; // image plane (-1,1)
+float intersectionMin = 0;
+float intersectionMax = 0;
+vec3 box_size = vec3(aabb_noise_max - aabb_noise_min);
 layout (location = 0) out vec4 fragmentColor;
-layout (binding = 0) uniform sampler3D noiseTexture;
 
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+// Fragment shader code for testing purposes.
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-// To improve performance we raytrace the floor
-// n: floor normal
-// o: floor position
-float raytraceFloor(vec3 ro, vec3 rd, vec3 n, vec3 o)
-{
-	return dot(o - ro, n) / dot(rd, n);
+// Constants.
+vec2 iMouse = vec2(resolution_y / 2.0f, resolution_x/2.0f);
+const int ITR = 100;
+const float FAR = 5.0;
+const float dt = FAR/float(ITR);
+const mat3 m3  = mat3( 0.00,  0.80,  0.60,
+                      -0.80,  0.36, -0.48,
+                      -0.60, -0.48,  0.64 );
+
+float hash1( float n ) {
+    return fract( n * 17.0 * fract( n * 0.3183099 ) );
 }
 
 
-float signedDistanceBox(vec3 p, vec3 b) {
-	vec3 d = abs(p) - b;
-	return min(max(d.x, max(d.y, d.z)), 0.0) + length(max(d, 0.0));
-}
+float noise( in vec3 x ) {
+    vec3 p = floor(x);
+    vec3 w = fract(x);
+    
+    //Fade function
+    vec3 u = w * w * w * (w * (w * 6.0 - 15.0) + 10.0);
+    
+    float n = p.x + 317.0 * p.y + 157.0 * p.z;
+    
+    float a = hash1(n + 0.0);
+    float b = hash1(n + 1.0);
+    float c = hash1(n + 317.0);
+    float d = hash1(n + 318.0);
+    float e = hash1(n + 157.0);
+	float f = hash1(n + 158.0);
+    float g = hash1(n + 474.0);
+    float h = hash1(n + 475.0);
 
-bool noiseHit(vec3 p) {
-	vec3 p_tex = p + vec3(0.5);
-	return texture(noiseTexture, p_tex).x > 0.46; // texture_ISO_threshold;
-}
+    float k0 =   a;
+    float k1 =   b - a;
+    float k2 =   c - a;
+    float k3 =   e - a;
+    float k4 =   a - b - c + d;
+    float k5 =   a - c - e + g;
+    float k6 =   a - b - e + f;
+    float k7 = - a + b + c - d + e - f - g + h;
 
-//Checks whether our ray intersects the provided AABB
-bool intersection(vec3 origin, vec3 direction) {
-	//find x-plane intersect
-	float tmin, tmax, tymin, tymax, tzmin, tzmax;
-
-	if (direction.x >= 0) {
-		tmin = (aabb_noise_min.x - origin.x) / direction.x;
-		tmax = (aabb_noise_max.x - origin.x) / direction.x;
-	}
-	else {
-		tmax = (aabb_noise_min.x - origin.x) / direction.x;
-		tmin = (aabb_noise_max.x - origin.x) / direction.x;
-	}
-
-	if (direction.y >= 0) {
-		tymin = (aabb_noise_min.y - origin.y) / direction.y;
-		tymax = (aabb_noise_max.y - origin.y) / direction.y;
-	}
-	else {
-		tymax = (aabb_noise_min.y - origin.y) / direction.y;
-		tymin = (aabb_noise_max.y - origin.y) / direction.y;
-	}
-	
-	// no intersection
-	if ((tmin > tymax) || (tymin > tmax)) return false; 
-
-	if (tymin > tmin) tmin = tymin;
-	if (tymax < tmax) tmax = tymax;
-
-	if (direction.z >= 0) {
-		tzmin = (aabb_noise_min.z - origin.z) / direction.z;
-		tzmax = (aabb_noise_max.z - origin.z) / direction.z;
-	}
-	else {
-		tzmax = (aabb_noise_min.z - origin.z) / direction.z;
-		tzmin = (aabb_noise_max.z - origin.z) / direction.z;
-	}
-	
-	if ((tmin > tzmax) || (tzmin > tmax)) return false;
-
-	if (tzmin > tmin)	tmin = tzmin;
-	if (tzmax < tmax) 	tmax = tzmax;
-	
-	intersectionMin = tmin;
-	intersectionMax = tmax;
-
-	return true ;//((tmin < 1000) && (tmax > 0));
-}
-
-vec4 raymarchNoise(vec3 ro, vec3 rd) {
-	vec4 color = vec4(0.0);
-	float t = 0;
-	float count = 0;
-	if (intersection(ro, rd)) {
-		//we use intersectionMin and Max.
-		
-		// Camera inside object
-		if ((intersectionMin < 0 && intersectionMax > 0)) {	
-			vec3 p = ro + rd;
-			while (count <= max_steps) {
-				p += rd * t;
-				// Found noise
-				if (noiseHit(p)) {
-					return vec4(
-						1 - count / max_steps,
-						1 - count / max_steps,
-						1 - count / max_steps,
-						1.0f); }
-				t += step_size;
-				count++; 
-			}
-		}
-
-		// Camera not inside the object
-		else {				
-			vec3 p = ro + rd * intersectionMin;
-			while (count <= max_steps) {
-				p += rd * t;
-				if (noiseHit(p)) {
-					return vec4( 
-					1 - count / max_steps,
-					1 - count / max_steps,
-					1 - count / max_steps,
-					1.0f); }
-				t += step_size;
-				count++;
-			}
-		}
-	
-	}
-	
-	return color;
-}
-
-vec4 raymarchSphere(vec3 ro, vec3 rd) {
-	vec4 color = vec4(0.0);
-	float t = 0;
-	float count = 0;
-	
-	if (intersection(ro,rd)) {
-		vec3 end = ro + rd * intersectionMax; 
-		
-		// Camera inside object
-		if (intersectionMin < 0 && intersectionMax > 0) {		
-			vec3 p = ro;
-			
-			while(count <= max_steps) {
-				p += rd * t;
-				float s_dist = length(p) - 0.5f;
-				// Found sphere
-				if (s_dist < alpha) {
-					return vec4(
-						1 - count / max_steps,
-						1 - count / max_steps,
-						1 - count / max_steps,
-						1.0f); }
-				t += step_size;
-				count++; 
-			}
-			return color;
-		}
-
-		// Camera not inside the object
-		else {				
-			vec3 p = ro + rd * intersectionMin;
-			while (count <= max_steps) {
-				p += rd * t;
-				float s_dist = length(p) - 0.5f;
-				if (s_dist < alpha) { 
-					return vec4( 
-					1 - count / max_steps,
-					1 - count / max_steps,
-					1 - count / max_steps,
-					1.0f); }
-				t += step_size;
-				count++;
-			}
-		}
-	
-	}
-		return color;
-}
-
-vec4 computeColor(vec3 ro, vec3 rd) {
-	return vec4(0);
-
+    return -1.0 + 2.0 * (k0 + k1 * u.x + k2 * u.y + k3 * u.z + k4 * u.x * u.y + k5 * u.y * u.z + k6 * u.z * u.x + k7 * u.x * u.y * u.z);
 }
 
 
-void main() 
-{
-	// image plane position (ray origin) eye is position of eye. Not direction!
+float fbm_4( in vec3 x ) {
+    float f = 2.0;
+    float s = 0.5;
+    float a = 0.0;
+    float b = 0.5;
+    
+    for( int i=0; i<4; i++ ) {
+        float n = noise(x);
+        a += b * n;
+        b *= s;
+        x = f * m3 * x;
+    }
+
+return a;
+}
+
+
+void main() {
+    //Setup.
+    vec2 iResolution = vec2(resolution_x, resolution_y);
+    vec2 p = fragCoord / iResolution - 0.5;
+	p.x *= iResolution.x / iResolution.y;
+	vec2 um = iMouse / iResolution - 0.5;
+	um.x *= iResolution.x / iResolution.y;
+
+
+    // Camera.
 	vec3 ro = eye;
-	vec3 rd = normalize(forward * f + right*uv.x *aspect_ratio + up*uv.y);
-	vec4 color = vec4(0.0); // Sky color
-	
-	fragmentColor= raymarchNoise(ro, rd);
+	vec3 rd =normalize(forward * f + right*fragCoord.x *aspect_ratio + up*fragCoord.y);
+    // ro.x += um.x;
+    // ro.z += 10.0 * um.y;
+
+	// March.
+    float t = 0.0;
+    float ctr = 0.0;
+	for( int i = 0 ; i < ITR; i++ ) {
+        // New position.
+        vec3 pos = ro + t * rd;
+        // Calculate sdf.
+        
+        float sdf_noise  = fbm_4(pos) * 0.5 + 0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
+        float sdf_floor  = pos.y + 0.6;
+        float sdf_val    = sdf_floor + sdf_noise;
+        //float sdf_sphere = length(vec3(0.0) - pos); // Radius 1, center at (0,0,0)
+        //float sdf_val    = sdf_sphere * sdf_noise;
+
+        // My code
+     //    if (count_check < ctr) {
+     //     fragmentColor = vec4(sdf_noise,0,0,1); 
+     //     break;
+     // }
+
+        // Iso-level check.d
+		if ( sdf_val < 0.5 ) {
+			// fragmentColor = vec4(sdf_val, 0, 0,1);
+			break;
+		};
+       
+        // Step forward and increment debug ctr.
+        t   += dt;
+        ctr += 1.0;
+	}
+	    
+    // Shade.
+	fragmentColor = vec4(vec3(ctr / float(ITR)),1.0);
+	// fragmentColor = vec4(fbm_4(vec3(fragCoord.x, fragCoord.y, 0)), 0 ,0, 1);
 }
 
 

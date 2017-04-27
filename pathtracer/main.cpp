@@ -31,10 +31,14 @@ uint32_t noise_texture_3D_id;
 // Camera parameters.
 vec3 worldUp = vec3(0, 1, 0);
 const float speed = 0.1f;
-///////////////////////////////////////////////////////////////////////////////
 vec3 eye = vec3(0, 0, -2);
 vec3 right		= vec3(1, 0, 0);
 vec3 forward	= vec3(0, 0, 1);
+
+// Parameters for the raymarcher
+float ground_threshold = 0.5f;
+float count_check = 0.0f;
+float max_steps = 1000.0f;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Load shaders, environment maps, models and so on
@@ -45,32 +49,7 @@ void initialize()
 	// Load shader program
 	///////////////////////////////////////////////////////////////////////////
 	shaderProgram = labhelper::loadShaderProgram("simple.vert", "simple.frag");
-	///////////////////////////////////////////////////////////////////////////
-	// Generate procedural texture
-	///////////////////////////////////////////////////////////////////////////
-	pathtracer::resizeTexture(100, 100, 100); // sample 100x100x100 values 
-	pathtracer::createNoiseIsoTexture(); // create model
-	/*glClearColor(0.0, 0.0, 0.0, 0.0);
-	glShadeModel(GL_FLAT);
-	glEnable(GL_DEPTH_TEST);
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);*/
-	glGenTextures(1, &noise_texture_3D_id);
-	glActiveTexture(GL_TEXTURE0); // SET TEXTURE LOCATION TO 1
-	glBindTexture(GL_TEXTURE_3D, noise_texture_3D_id);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-	//save the texture
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB8,
-		pathtracer::noise_texture_3D.res_z,
-		pathtracer::noise_texture_3D.res_y,
-		pathtracer::noise_texture_3D.res_x,
-		0, GL_RGB, GL_FLOAT,
-		pathtracer::noise_texture_3D.getPointer());
-	
 	//Add a sweet sweet bounding box for the noise.
 	glUseProgram(shaderProgram);
 	labhelper::setUniformSlow(shaderProgram, "aabb_noise_min", pathtracer::bounding_box_aa.min_corner);//vec3
@@ -110,6 +89,9 @@ void display(void) {
 	labhelper::setUniformSlow(shaderProgram, "resolution_x", (float)windowWidth);
 	labhelper::setUniformSlow(shaderProgram, "resolution_y", (float)windowHeight);
 	labhelper::setUniformSlow(shaderProgram, "aspect_ratio", (float)windowWidth / windowHeight);
+	labhelper::setUniformSlow(shaderProgram, "ground_threshold", ground_threshold);
+	labhelper::setUniformSlow(shaderProgram, "max_steps", max_steps);
+	labhelper::setUniformSlow(shaderProgram, "count_check", count_check);	
 	labhelper::drawFullScreenQuad();
 }
 
@@ -241,54 +223,16 @@ bool handleEvents(void) {
 void gui() {
 	// Inform imgui of new frame
 	ImGui_ImplSdlGL3_NewFrame(g_window);
-
 	/////////////////////////////////////////////////////////////////////////////
-	//// List all materials in the model and show properties for the selected
+	//// Raymarcher settings
 	/////////////////////////////////////////////////////////////////////////////
-	//if (ImGui::CollapsingHeader("Materials", "materials_ch", true, true))
-	//{
-	//	ImGui::ListBox("Materials", &material_index, material_getter,
-	//		(void*)&model->m_materials, model->m_materials.size(), 8);
-	//	labhelper::Material & material = model->m_materials[material_index];
-	//	char name[256];
-	//	strcpy(name, material.m_name.c_str());
-	//	if (ImGui::InputText("Material Name", name, 256)) { material.m_name = name; }
-	//	ImGui::ColorEdit3("Color", &material.m_color.x);
-	//	ImGui::SliderFloat("Reflectivity", &material.m_reflectivity, 0.0f, 1.0f);
-	//	ImGui::SliderFloat("Metalness", &material.m_metalness, 0.0f, 1.0f);
-	//	ImGui::SliderFloat("Fresnel", &material.m_fresnel, 0.0f, 1.0f);
-	//	ImGui::SliderFloat("shininess", &material.m_shininess, 0.0f, 25000.0f);
-	//	ImGui::SliderFloat("Emission", &material.m_emission, 0.0f, 10.0f);
-	//	ImGui::SliderFloat("Transparency", &material.m_transparency, 0.0f, 1.0f);
-	//}
-
-	/////////////////////////////////////////////////////////////////////////////
-	//// Light and environment map
-	/////////////////////////////////////////////////////////////////////////////
-	//if (ImGui::CollapsingHeader("Light sources", "lights_ch", true, true))
-	//{
-	//	ImGui::SliderFloat("Environment multiplier", &pathtracer::environment.multiplier, 0.0f, 10.0f);
-	//	ImGui::ColorEdit3("Point light color", &pathtracer::point_light.color.x);
-	//	ImGui::SliderFloat("Point light intensity multiplier", &pathtracer::point_light.intensity_multiplier, 0.0f, 10000.0f);
-	//}
-
-	/////////////////////////////////////////////////////////////////////////////
-	//// Pathtracer settings
-	/////////////////////////////////////////////////////////////////////////////
-	//if (ImGui::CollapsingHeader("Pathtracer", "pathtracer_ch", true, true))
-	//{
-	//	ImGui::SliderInt("Subsampling", &pathtracer::settings.subsampling, 1, 16);
-	//	ImGui::SliderInt("Max Bounces", &pathtracer::settings.max_bounces, 0, 16);
-	//	ImGui::SliderInt("Max Paths Per Pixel", &pathtracer::settings.max_paths_per_pixel, 0, 1024);
-	//}
-
-	/////////////////////////////////////////////////////////////////////////////
-	//// A button for saving your results
-	/////////////////////////////////////////////////////////////////////////////
-
-
-	//// Render the GUI.
-	//ImGui::Render();
+	if (ImGui::CollapsingHeader("Pathtracer", "pathtracer_ch", true, true))
+	{
+		ImGui::SliderFloat("Ground Threshold", &ground_threshold, 0.01f, 1.0f);
+		ImGui::SliderFloat("Noise Val at Count#", &count_check, 0.0f, 100);
+	}
+	// Render the GUI.
+	ImGui::Render();
 }
 
 int main(int argc, char *argv[])
