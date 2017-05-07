@@ -1,38 +1,57 @@
 #version 420
-
 // required by GLSL spec Sect 4.5.3 (though nvidia does not, amd does)
 precision highp float;
 
-//Final color
+
+
+//--------------------Final color-----------------------
 layout (location = 0) out vec4 fragmentColor;
 
-/*//////////////////////////////////////////////////////
-/////Input from main
-*///////////////////////////////////////////////////////
-// Camera Position-----------------------------
-uniform vec3 eye;
-
-// Camera-----------------------------
+//////////////////////////////////////////////////////////
+//// Camera
+/////////////////////////////////////////////////////////
+uniform vec3 eye; // Position
 uniform vec3 right;
 uniform vec3 up;
 uniform vec3 forward;
 
-//Screen-----------------------------
-uniform float aspect_ratio;
-uniform float resolution_x;
-uniform float resolution_y;
+//////////////////////////////////////////////////////////
+////// Lighting
+//////////////////////////////////////////////////////////
+//---------First light---------------------------
+vec3 sun_dir = vec3(0,-1, 0.4);
+vec3 sun_color = vec3(0.9,0.6,0.2);
+float sun_intensity = 1.5;
+//---------Second light---------------------------
+vec3 sky_dir = vec3(0,-1,0);
+vec3 sky_color = vec3(0,0.8,0.2);
+float sky_intensity = 0.2;
+//---------Terrain Material-----------------------
+uniform vec3 material_color;
+uniform float material_reflectivity;
+uniform float material_metalness;
+uniform float material_fresnel;
+uniform float material_shininess;
+uniform float material_emission;
 
-//UV-coordinates-----------------------------
-in vec2 fragCoord; // image plane (-1,1)
-
-//Raymarcher parameters----------------------
+/////////////////////////////////////////////////////////
+/////Raymarcher parameters
+/////////////////////////////////////////////////////////
 uniform float ground_threshold;
 uniform float max_steps;
 uniform float count_check;
 float step_size = 1.0f/max_steps;
 float f = 1.67f; //focal length
 
-//Noise Properties-----------------------------
+//////////////////////////////////////////////////////////
+///// Screen
+//////////////////////////////////////////////////////////
+uniform float aspect_ratio;
+uniform float resolution_x;
+uniform float resolution_y;
+//UV-coordinates-----------------------------
+in vec2 fragCoord; // image plane (-1,1)
+//-----------Noise Properties--------------
 const int octaves = 6;
 const int ITR = 100;
 const float FAR = 5.0;
@@ -40,7 +59,127 @@ const float dt = FAR/float(ITR);
 const mat3 m3  = mat3( 0.00,  0.80,  0.60,
                       -0.80,  0.36, -0.48,
                       -0.60, -0.48,  0.64 );
+const mat3 m3i = mat3( 0.00, -0.80, -0.60,
+                       0.80,  0.36, -0.48,
+                       0.60, -0.48,  0.64 );
 
+
+
+/*//////////////////////////////////////////////////////
+///// Light calculation functions
+*///////////////////////////////////////////////////////
+
+// float F(vec3 wi, vec3 n) {
+// 	//Calculate fresnel term F
+// 	float R0 = material_fresnel;
+// 	return R0 + (1.0 - R0) * pow(1.0 - dot(n, wi), 5.0);
+// }
+
+// float D(vec3 wi, vec3 wo, vec3 n) {
+// 	//Calculate microfacet distribution term D
+// 	vec3 wh = normalize(wi + wo);		//half-angle between inc- and out. directions
+// 	float s = material_shininess;
+// 	return ((s + 2) / (2 * PI)) * (pow(dot(n, wh), s));
+// }
+
+// float G(vec3 wi, vec3 wo, vec3 n) {
+// 	vec3 wh = normalize(wi + wo);		//half-angle between inc- and out. directions
+// 	//Calculate the masking term G
+// 	float term1 = dot(n, wh)*dot(n, wo) / dot(wo, wh);
+// 	float term2 = dot(n, wh)*dot(n, wi) / dot(wo, wh);
+// 	return min(1, min(2 * term1, 2 * term2));
+// }
+
+
+// vec3 calculateDirectIllumiunation(vec3 wo, vec3 n) {
+// 	///////////////////////////////////////////////////////////////////////////
+// 	// Task 1.2 - Calculate the radiance Li from the light, and the direction
+// 	//            to the light. If the light is backfacing the triangle, 
+// 	//            return vec3(0); 
+// 	///////////////////////////////////////////////////////////////////////////
+// 	vec3 wi = normalize(-viewSpacePosition + viewSpaceLightPosition);
+// 	float liCond = dot(wi, n);
+// 	if (liCond <= 0)	return vec3(0);
+// 	float d = distance(viewSpaceLightPosition, viewSpacePosition );
+// 	vec3 Li = point_light_intensity_multiplier * point_light_color * (1.0 / (d*d));
+
+// 	///////////////////////////////////////////////////////////////////////////
+// 	// Task 1.3 - Calculate the diffuse term and return that as the result
+// 	///////////////////////////////////////////////////////////////////////////
+// 	vec3 diffuseBRDF = material_color / PI ;
+// 	vec3 diffuse_term = diffuseBRDF *  abs(liCond) * Li;
+
+// 	///////////////////////////////////////////////////////////////////////////
+// 	// Task 2 - Calculate the Torrance Sparrow BRDF and return the light 
+// 	//          reflected from that instead
+// 	///////////////////////////////////////////////////////////////////////////
+	
+// 	float F = F(wi, n);
+// 	float D = D(wi, wo, n);
+// 	float G = G(wi, wo, n);
+
+// 	// Create the microfacet term with BRDF
+// 	float brdf = (F*D*G) / (4 * dot(n, wo)*dot(n, wi));
+// 	vec3 brdf_light = brdf * dot(n, wi) * Li;
+ 
+
+// 	///////////////////////////////////////////////////////////////////////////
+// 	// Task 3 - Make your shader respect the parameters of our material model.
+// 	///////////////////////////////////////////////////////////////////////////
+// 	float m = material_metalness;
+// 	float r = material_reflectivity;
+
+// 	vec3 dielectric_term = (brdf * dot(n,wi)*Li) + ((1 - F) * diffuse_term);
+// 	vec3 metal_term = brdf * material_color * dot(n, wi) * Li;
+// 	vec3 microfacet_term = m * metal_term + (1 - m) * dielectric_term;
+// 	vec3 light = (r * microfacet_term) + ((1 - r) * diffuse_term);
+// 	return light;
+// }
+
+// vec2 toSpherical(vec3 dir) {
+// 	// Calculate the spherical coordinates of the direction
+// 	float theta = acos(max(-1.0f, min(1.0f, dir.y)));
+// 	float phi = atan(dir.z, dir.x);
+// 	if (phi < 0.0f) phi = phi + 2.0f * PI;
+// 	return vec2(phi / (2.0 *PI), theta / PI);
+// }
+
+// vec3 calculateIndirectIllumination(vec3 wo, vec3 n) {
+// 	///////////////////////////////////////////////////////////////////////////
+// 	// Task 5 - Lookup the irradiance from the irradiance map and calculate
+// 	//          the diffuse reflection
+// 	///////////////////////////////////////////////////////////////////////////
+// 	// Calculate the world-space direction from the camera to that position
+// 	vec3 dir = normalize(viewInverse.xyz * n);
+// 	vec2 lookup = toSpherical(dir);
+// 	vec4 irradiance = environment_multiplier * texture(irradianceMap, lookup);
+// 	vec3 diffuse_term = material_color * (1.0 / PI) * irradiance.xyz;
+
+
+// 	///////////////////////////////////////////////////////////////////////////
+// 	// Task 6 - Look up in the reflection map from the perfect specular 
+// 	//          direction and calculate the dielectric and metal terms. 
+// 	///////////////////////////////////////////////////////////////////////////
+// 	vec3 wi = reflect(-wo, n);
+
+// 	float s = material_shininess;
+// 	float roughness = sqrt(sqrt(2 / (s + 2)));
+	
+// 	float F = F(wi, n); // view space
+// 	mat3 transformation = mat3(viewInverse);
+// 	wi = normalize(transformation * wi);
+// 	vec2 lookup2 = toSpherical(wi);
+	
+// 	vec3 Li = environment_multiplier * textureLod(reflectionMap, lookup2, roughness * 7.0).xyz;
+	
+// 	float m = material_metalness;
+// 	float r = material_reflectivity;
+// 	vec3 dielectric_term = F * Li + (1 - F) * diffuse_term;
+// 	vec3 metal_term = F * material_color * Li;
+// 	vec3 microfacet_term = m * metal_term + (1 - m) * dielectric_term;
+// 	vec3 derp = r * microfacet_term + (1 - r) * diffuse_term;
+// 	return derp;
+// }
 
 /*//////////////////////////////////////////////////////
 ///// Noise calculation
@@ -125,24 +264,18 @@ vec4 fbm_4( in vec3 x ) {
         value += amplitude * noise.x;
         derivative += amplitude * m * noise.yzw;
         amplitude *= gain;
+        // TODO: I am still unsure why we use the matrices!
         x = frequency * m3 * x;
-        //uses another matrix than m3 but I'm not sure which.->
-        m = frequency * m3 * m; 
+        m = frequency * m3i * m; 
     }
 
 return vec4(value,derivative);
 }
 
-void main() {
-     // Camera.
-	vec3 ro = eye;
-	vec3 rd =normalize(forward * f + right*fragCoord.x *aspect_ratio + up*fragCoord.y);
-    // ro.x += um.x;
-    // ro.z += 10.0 * um.y;
-
+void raymarch(vec3 ro, vec3 rd, out float ctr, out vec3 derivative) {
 	// March.
     float t = 0.0;
-    float ctr = 0.0;
+
 	for( int i = 0 ; i < ITR; i++ ) {
         // New position.
         vec3 pos = ro + t * rd;
@@ -155,15 +288,9 @@ void main() {
         //float sdf_sphere = length(vec3(0.0) - pos); // Radius 1, center at (0,0,0)
         //float sdf_val    = sdf_sphere * sdf_noise;
 
-        // My code
-     //    if (count_check < ctr) {
-     //     fragmentColor = vec4(sdf_noise,0,0,1); 
-     //     break;
-     // }
-
         // Iso-level check.d
-		if ( sdf_val < 0.5 ) {
-			// fragmentColor = vec4(sdf_val, 0, 0,1);
+		if ( sdf_val < ground_threshold ) {
+			derivative = fbm_noise.yzw;
 			break;
 		};
        
@@ -171,9 +298,34 @@ void main() {
         t   += dt;
         ctr += 1.0;
 	}
-	    
+	
+}
+
+void shade (vec3 ro, vec3 rd) {
+	//Perform raymarching
+  	float ctr = 0.0;
+  	vec3 derivative = vec3(0.0);
+    raymarch(ro, rd, ctr, derivative);
+
     // Shade.
 	fragmentColor = vec4(vec3(ctr / float(ITR)), 1.0);
+    // // do amazing visuals
+    // vec3 color = doFantasticDemo();
+
+    // // gamma correction
+    // color = pow( color, vec3(1.0/2.2) );
+
+    // // final step, display (and perhaps color grade)
+    // fragmentColor = color;
+
 }
+
+void main() {
+     // Camera.
+	vec3 ro = eye;
+	vec3 rd = normalize(forward * f + right*fragCoord.x *aspect_ratio + up*fragCoord.y);
+    shade(ro,rd);
+}
+	
 
 

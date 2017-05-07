@@ -11,40 +11,44 @@
 #include <Model.h>
 #include <string>
 #include "procedural.h"
+#include "material.cpp"
 
 using namespace glm;
 
-///////////////////////////////////////////////////////////////////////////////
-// Various globals
-///////////////////////////////////////////////////////////////////////////////
 SDL_Window* g_window = nullptr;
 int windowWidth = 0, windowHeight = 0;
 ///////////////////////////////////////////////////////////////////////////////
 // Shader programs
 ///////////////////////////////////////////////////////////////////////////////
 GLuint shaderProgram;
+
 ///////////////////////////////////////////////////////////////////////////////
-// GL texture to put pathtracing result into
+// Shader parameters
 ///////////////////////////////////////////////////////////////////////////////
-uint32_t noise_texture_3D_id;
-///////////////////////////////////////////////////////////////////////////////
-// Camera parameters.
 vec3 worldUp = vec3(0, 1, 0);
 const float speed = 0.1f;
 vec3 eye = vec3(0, 0, -2);
 vec3 right		= vec3(1, 0, 0);
 vec3 forward	= vec3(0, 0, 1);
-
 // Parameters for the raymarcher
 float ground_threshold = 0.5f;
 float count_check = 0.0f;
 float max_steps = 1000.0f;
+Material terrain_mat;
+//Lights 
+//First light
+vec3 sun_dir = vec3(0,-1, 0.4);
+vec3 sun_color = vec3(0.9,0.6,0.2);
+float sun_intensity = 1.5;
+//Second light
+vec3 sky_dir = vec3(0,-1,0);
+vec3 sky_color = vec3(0,0.8,0.2);
+float sky_intensity = 0.2;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Load shaders, environment maps, models and so on
 ///////////////////////////////////////////////////////////////////////////////
-void initialize()
-{
+void initialize() {
 	///////////////////////////////////////////////////////////////////////////
 	// Load shader program
 	///////////////////////////////////////////////////////////////////////////
@@ -90,12 +94,22 @@ void display(void) {
 	labhelper::setUniformSlow(shaderProgram, "ground_threshold", ground_threshold);
 	labhelper::setUniformSlow(shaderProgram, "max_steps", max_steps);
 	labhelper::setUniformSlow(shaderProgram, "count_check", count_check);	
+	labhelper::setUniformSlow(shaderProgram, "sun_dir", sun_dir);	
+	//Uniforms for terrain material (lighting)
+	labhelper::setUniformSlow(shaderProgram, "material_fresnel", terrain_mat.material_fresnel);
+	labhelper::setUniformSlow(shaderProgram, "material_color", terrain_mat.material_color);
+	labhelper::setUniformSlow(shaderProgram, "material_emission", terrain_mat.material_emission);
+	labhelper::setUniformSlow(shaderProgram, "material_shininess", terrain_mat.material_shininess);
+	labhelper::setUniformSlow(shaderProgram, "material_reflectivity", terrain_mat.material_reflectivity);
+	labhelper::setUniformSlow(shaderProgram, "material_metalness", terrain_mat.material_metalness);
+	labhelper::setUniformSlow(shaderProgram, "material_color", terrain_mat.material_color);
+
 	labhelper::drawFullScreenQuad();
+
 }
 
 
-bool handleEvents(void)
-{
+bool handleEvents(void) {
 	// check events (keyboard among other)
 	SDL_Event event;
 	bool quitEvent = false;
@@ -158,7 +172,7 @@ void gui() {
 	/////////////////////////////////////////////////////////////////////////////
 	//// Raymarcher settings
 	/////////////////////////////////////////////////////////////////////////////
-	if (ImGui::CollapsingHeader("Pathtracer", "pathtracer_ch", true, true))
+	if (ImGui::CollapsingHeader("Raymarching", "pathtracer_ch", true, true))
 	{
 		ImGui::SliderFloat("Ground Threshold", &ground_threshold, 0.01f, 1.0f);
 		ImGui::SliderFloat("Noise Val at Count#", &count_check, 0.0f, 100);
@@ -180,7 +194,7 @@ int main(int argc, char *argv[]) {
 		display();
 
 		// Then render overlay GUI.
-		// gui();
+		gui();
 
 		// Swap front and back buffer. This frame will now be displayed.
 		SDL_GL_SwapWindow(g_window);  
