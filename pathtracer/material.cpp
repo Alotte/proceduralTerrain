@@ -37,6 +37,6 @@ class Material {
             material_fresnel(0.1),
             material_shininess(0.1),
             material_emission(0.1),
-            material_color(0.9, 0.7,0.1){}
+            material_color(0.9, 0.7,0.5){}
 
 };

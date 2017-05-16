@@ -18,13 +18,16 @@ uniform vec3 forward;
 //////////////////////////////////////////////////////////
 ////// Lighting
 //////////////////////////////////////////////////////////
+//---------Constants-----------------------------
+#define PI 3.14159265359
 //---------First light---------------------------
-vec3 sun_dir = vec3(0,-1, 0.4);
+//vec3 sun_dir = vec3(0,-1, 0.4);
+vec3  sun_dir = vec3(-0.624695,0.468521,-0.624695);
 vec3 sun_color = vec3(0.9,0.6,0.2);
 float sun_intensity = 1.5;
 //---------Second light---------------------------
-vec3 sky_dir = vec3(0,-1,0);
-vec3 sky_color = vec3(0,0.8,0.2);
+vec3 sky_dir = vec3(0, 1, 0.2);
+vec3 sky_color = vec3(1, 1, 1);
 float sky_intensity = 0.2;
 //---------Terrain Material-----------------------
 uniform vec3 material_color;
@@ -52,8 +55,8 @@ uniform float resolution_y;
 //UV-coordinates-----------------------------
 in vec2 fragCoord; // image plane (-1,1)
 //-----------Noise Properties--------------
-const int octaves = 6;
-const int ITR = 100;
+const int octaves = 10;
+const int ITR = 150;
 const float FAR = 5.0;
 const float dt = FAR/float(ITR);
 const mat3 m3  = mat3( 0.00,  0.80,  0.60,
@@ -69,28 +72,72 @@ const mat3 m3i = mat3( 0.00, -0.80, -0.60,
 ///// Light calculation functions
 *///////////////////////////////////////////////////////
 
-// float F(vec3 wi, vec3 n) {
-// 	//Calculate fresnel term F
-// 	float R0 = material_fresnel;
-// 	return R0 + (1.0 - R0) * pow(1.0 - dot(n, wi), 5.0);
-// }
+float F(vec3 wi, vec3 n) {
+	//Calculate fresnel term F
+	float R0 = material_fresnel;
+	return R0 + (1.0 - R0) * pow(1.0 - dot(n, wi), 5.0);
+}
 
-// float D(vec3 wi, vec3 wo, vec3 n) {
-// 	//Calculate microfacet distribution term D
-// 	vec3 wh = normalize(wi + wo);		//half-angle between inc- and out. directions
-// 	float s = material_shininess;
-// 	return ((s + 2) / (2 * PI)) * (pow(dot(n, wh), s));
-// }
+float D(vec3 wi, vec3 wo, vec3 n) {
+	//Calculate microfacet distribution term D
+	vec3 wh = normalize(wi + wo);		//half-angle between inc- and out. directions
+	float s = material_shininess;
+	return ((s + 2) / (2 * PI)) * (pow(dot(n, wh), s));
+}
 
-// float G(vec3 wi, vec3 wo, vec3 n) {
-// 	vec3 wh = normalize(wi + wo);		//half-angle between inc- and out. directions
-// 	//Calculate the masking term G
-// 	float term1 = dot(n, wh)*dot(n, wo) / dot(wo, wh);
-// 	float term2 = dot(n, wh)*dot(n, wi) / dot(wo, wh);
-// 	return min(1, min(2 * term1, 2 * term2));
-// }
+float G(vec3 wi, vec3 wo, vec3 n) {
+	vec3 wh = normalize(wi + wo);		//half-angle between inc- and out. directions
+	//Calculate the masking term G
+	float term1 = dot(n, wh)*dot(n, wo) / dot(wo, wh);
+	float term2 = dot(n, wh)*dot(n, wi) / dot(wo, wh);
+	return min(1, min(2 * term1, 2 * term2));
+}
 
+vec3 calculateDirectIllumiunation(vec3 wo, vec3 n) {
+	///////////////////////////////////////////////////////////////////////////
+	// Task 1.2 - Calculate the radiance Li from the light, and the direction
+	//            to the light. If the light is backfacing the triangle, 
+	//            return vec3(0); 
+	///////////////////////////////////////////////////////////////////////////
+	vec3 wi = normalize(-eye + sun_dir); // uses position but we have sun...
+	float liCond = dot(wi, n);
+	if (liCond <= 0)	return vec3(0);
+	// Disregard distance to directional light!
+	vec3 Li = sun_intensity * sun_color;
 
+	///////////////////////////////////////////////////////////////////////////
+	// Task 1.3 - Calculate the diffuse term and return that as the result
+	///////////////////////////////////////////////////////////////////////////
+	vec3 diffuseBRDF = material_color / PI ;
+	vec3 diffuse_term = diffuseBRDF *  abs(liCond) * Li;
+
+	///////////////////////////////////////////////////////////////////////////
+	// Task 2 - Calculate the Torrance Sparrow BRDF and return the light 
+	//          reflected from that instead
+	///////////////////////////////////////////////////////////////////////////
+	
+	float F = F(wi, n);
+	float D = D(wi, wo, n);
+	float G = G(wi, wo, n);
+
+	// Create the microfacet term with BRDF
+	float brdf = (F*D*G) / (4 * dot(n, wo)*dot(n, wi));
+	vec3 brdf_light = brdf * dot(n, wi) * Li;
+ 
+
+	///////////////////////////////////////////////////////////////////////////
+	// Task 3 - Make your shader respect the parameters of our material model.
+	///////////////////////////////////////////////////////////////////////////
+	float m = material_metalness;
+	float r = material_reflectivity;
+
+	vec3 dielectric_term = (brdf * dot(n,wi)*Li) + ((1 - F) * diffuse_term);
+	vec3 metal_term = brdf * material_color * dot(n, wi) * Li;
+	vec3 microfacet_term = m * metal_term + (1 - m) * dielectric_term;
+	vec3 light = (r * microfacet_term) + ((1 - r) * diffuse_term);
+	return light;
+}
+//SAFE COPY
 // vec3 calculateDirectIllumiunation(vec3 wo, vec3 n) {
 // 	///////////////////////////////////////////////////////////////////////////
 // 	// Task 1.2 - Calculate the radiance Li from the light, and the direction
@@ -198,7 +245,7 @@ vec4 noise( in vec3 x ) {
     vec3 u = w * w * w * (w * (w * 6.0 - 15.0) + 10.0);
     //Derivative of the fade function.
     vec3 du = 30.0 * w * w * (w * (w - 2.0) + 1.0);
-
+ 
     //Compute 1D value for the hash for each corner of the box.
     float n = p.x + 317.0 * p.y + 157.0 * p.z;
     
@@ -264,7 +311,7 @@ vec4 fbm_4( in vec3 x ) {
         value += amplitude * noise.x;
         derivative += amplitude * m * noise.yzw;
         amplitude *= gain;
-        // TODO: I am still unsure why we use the matrices!
+        // To mitigate aliasing in noise use matrices.
         x = frequency * m3 * x;
         m = frequency * m3i * m; 
     }
@@ -272,10 +319,8 @@ vec4 fbm_4( in vec3 x ) {
 return vec4(value,derivative);
 }
 
-void raymarch(vec3 ro, vec3 rd, out float ctr, out vec3 derivative) {
+void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative) {
 	// March.
-    float t = 0.0;
-
 	for( int i = 0 ; i < ITR; i++ ) {
         // New position.
         vec3 pos = ro + t * rd;
@@ -293,7 +338,7 @@ void raymarch(vec3 ro, vec3 rd, out float ctr, out vec3 derivative) {
 			derivative = fbm_noise.yzw;
 			break;
 		};
-       
+       	
         // Step forward and increment debug ctr.
         t   += dt;
         ctr += 1.0;
@@ -301,23 +346,40 @@ void raymarch(vec3 ro, vec3 rd, out float ctr, out vec3 derivative) {
 	
 }
 
+vec3 terrainNormal(vec3 v1) {
+	vec3 v2 = { 0,0,0 };
+	v2.x = v1.x;
+	v2.y = v1.y;
+	v2.z = 1;
+
+	// if (length(v2) == 0) {
+	// 	v2.x = -v1.y - v1.z;
+	// 	v2.y = v1.x;
+	// 	v2.z = v1.x;
+	// }
+	return normalize(v2);
+}
+
 void shade (vec3 ro, vec3 rd) {
 	//Perform raymarching
   	float ctr = 0.0;
   	vec3 derivative = vec3(0.0);
-    raymarch(ro, rd, ctr, derivative);
+  	float t = 0;
+    raymarch(ro, rd, ctr, t, derivative);
 
+    vec3 normal = terrainNormal(derivative);
     // Shade.
-	fragmentColor = vec4(vec3(ctr / float(ITR)), 1.0);
-    // // do amazing visuals
-    // vec3 color = doFantasticDemo();
+	
+	// fragmentColor = vec4(vec3(ctr / float(ITR)), 1.0);
+    // do amazing visuals
+    vec3 color = calculateDirectIllumiunation(-normalize(ro + rd * t), normal) + 0.8*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));;
 
-    // // gamma correction
-    // color = pow( color, vec3(1.0/2.2) );
+    // gamma correction
+    color = pow( color, vec3(1.0/2.2) );
 
-    // // final step, display (and perhaps color grade)
-    // fragmentColor = color;
 
+    // final step, display (and perhaps color grade)
+    fragmentColor = vec4(color.xyz, 1);
 }
 
 void main() {
