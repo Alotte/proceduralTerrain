@@ -31,11 +31,11 @@ uniform float material_emission;
 //---------First light---------------------------
 //vec3 sun_dir = vec3(0,-1, 0.4);
 vec3 sun_dir = vec3(-0.624695,0.668521,-0.624695);
-vec3 sun_color = vec3(0.9,0.6,0.2);
+vec3 sun_color = vec3(1.0,0.89, 0.76);
 float sun_intensity = 1.4;
 //---------Second light---------------------------
 vec3 sky_dir = vec3(0, 1, 0);
-vec3 sky_color = vec3(0.2 , 0.4, 1.0);
+vec3 sky_color = vec3(0.5,0.65,0.7);
 float sky_intensity = 0.4;
 //---------Third light ("Ambient")----------------
 vec3 indirect_dir = vec3(0.624695, 0 ,0.624695);
@@ -285,9 +285,16 @@ vec3 calculateDirectIllumiunation(vec3 wo, vec3 n, vec3 light_dir, vec3 light_co
     // return light;
 }
 
-//TODO:
+
 vec3 fog(in vec3 landscape_color, in float distance, in vec3 rayDir, in vec3 sunDir) {
-    return vec3(0);
+    float fog_intensity = 0.08;
+    float fogAmount = 1.0 - exp(-distance * fog_intensity);
+    //Is there sun or is it in shadow
+    float sunAmount = max( dot(rayDir, sunDir), 0.0);
+    //We want the fog to be affected by the intensity of the sunlight.
+    float sunIntensity = pow(sunAmount, 8.0);
+    vec3 fogColor = mix(sky_color, sun_color, sunIntensity);
+    return mix(landscape_color, fogColor, fogAmount);
 } 
 
 void shade (vec3 ro, vec3 rd) {
@@ -303,25 +310,28 @@ void shade (vec3 ro, vec3 rd) {
 	
 	// fragmentColor = vec4(vec3(ctr / float(ITR)), 1.0);
     // do amazing visuals
-   vec3 wo =  -normalize(ro + rd * t);
-   //Regular lighting
-   vec3 colorSun = calculateDirectIllumiunation(wo, normal, sun_dir, sun_color, sun_intensity);
-   vec3 colorInd = calculateDirectIllumiunation(wo, normal, indirect_dir, indirect_color, indirect_intensity);
-   vec3 color = colorSun + colorInd; //+ 0.6*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));
+    vec3 wo =  -normalize(ro + rd * t);
+    //Regular lighting
+    vec3 colorSun = calculateDirectIllumiunation(wo, normal, sun_dir, sun_color, sun_intensity);
+    vec3 colorInd = calculateDirectIllumiunation(wo, normal, indirect_dir, indirect_color, indirect_intensity);
+    vec3 color = colorSun + colorInd; //+ 0.6*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));
 
-   //Other (simple?) lighting.
-   // float sun = clamp(dot( normal, sun_dir), 0.0, 1.0);
-   float sky = clamp(0.5 + 0.5 * normal.y, 0.0, 1.0);
-   // float ind = clamp(dot( normal, normalize(indirect_dir)), 0.0, 1.0);
+    //Other (simple?) lighting.
+    // float sun = clamp(dot( normal, sun_dir), 0.0, 1.0);
+    float sky = clamp(0.5 + 0.5 * normal.y, 0.0, 1.0);
+    // float ind = clamp(dot( normal, normalize(indirect_dir)), 0.0, 1.0);
 
-   vec3 lin =// sun*sun_color*sun_intensity;
-  /* lin +=*/ sky*sky_color*sky_intensity;
-   // lin += ind*indirect_color*indirect_intensity;
-   // vec3     color = material_color * lin;
-   color += lin*material_color + 0.4*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));;
-    
- 
-   // + 0.6*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));
+    vec3 lin =// sun*sun_color*sun_intensity;
+    /* lin +=*/ sky*sky_color*sky_intensity;
+    // lin += ind*indirect_color*indirect_intensity;
+    // vec3     color = material_color * lin;
+
+    color += lin*material_color; //+ 0.4*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));;
+
+    //Add fog
+    color = fog(color, length(rd * t), rd, sun_dir);
+
+    // + 0.6*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));
     // gamma correction
     color = pow( color, vec3(1.0/2.2) );
 
