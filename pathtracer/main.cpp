@@ -11,40 +11,44 @@
 #include <Model.h>
 #include <string>
 #include "procedural.h"
+#include "material.cpp"
 
 using namespace glm;
 
-///////////////////////////////////////////////////////////////////////////////
-// Various globals
-///////////////////////////////////////////////////////////////////////////////
 SDL_Window* g_window = nullptr;
 int windowWidth = 0, windowHeight = 0;
 ///////////////////////////////////////////////////////////////////////////////
 // Shader programs
 ///////////////////////////////////////////////////////////////////////////////
 GLuint shaderProgram;
+
 ///////////////////////////////////////////////////////////////////////////////
-// GL texture to put pathtracing result into
+// Shader parameters
 ///////////////////////////////////////////////////////////////////////////////
-uint32_t noise_texture_3D_id;
-///////////////////////////////////////////////////////////////////////////////
-// Camera parameters.
 vec3 worldUp = vec3(0, 1, 0);
 const float speed = 0.1f;
 vec3 eye = vec3(0, 0, -2);
 vec3 right		= vec3(1, 0, 0);
 vec3 forward	= vec3(0, 0, 1);
-
 // Parameters for the raymarcher
 float ground_threshold = 0.5f;
 float count_check = 0.0f;
 float max_steps = 1000.0f;
+Material terrain_mat;
+//Lights 
+//First light
+vec3 sun_dir = vec3(0,-1, 0.4);
+vec3 sun_color = vec3(0.9,0.6,0.2);
+float sun_intensity = 1.5;
+//Second light
+vec3 sky_dir = vec3(0,-1,0);
+vec3 sky_color = vec3(0,0.8,0.2);
+float sky_intensity = 0.2;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Load shaders, environment maps, models and so on
 ///////////////////////////////////////////////////////////////////////////////
-void initialize()
-{
+void initialize() {
 	///////////////////////////////////////////////////////////////////////////
 	// Load shader program
 	///////////////////////////////////////////////////////////////////////////
@@ -52,8 +56,6 @@ void initialize()
 
 	//Add a sweet sweet bounding box for the noise.
 	glUseProgram(shaderProgram);
-	labhelper::setUniformSlow(shaderProgram, "aabb_noise_min", pathtracer::bounding_box_aa.min_corner);//vec3
-	labhelper::setUniformSlow(shaderProgram, "aabb_noise_max", pathtracer::bounding_box_aa.max_corner);
 }
 
 void display(void) {
@@ -92,12 +94,22 @@ void display(void) {
 	labhelper::setUniformSlow(shaderProgram, "ground_threshold", ground_threshold);
 	labhelper::setUniformSlow(shaderProgram, "max_steps", max_steps);
 	labhelper::setUniformSlow(shaderProgram, "count_check", count_check);	
+	labhelper::setUniformSlow(shaderProgram, "sun_dir", sun_dir);	
+	//Uniforms for terrain material (lighting)
+	labhelper::setUniformSlow(shaderProgram, "material_fresnel", terrain_mat.material_fresnel);
+	labhelper::setUniformSlow(shaderProgram, "material_color", terrain_mat.material_color);
+	labhelper::setUniformSlow(shaderProgram, "material_emission", terrain_mat.material_emission);
+	labhelper::setUniformSlow(shaderProgram, "material_shininess", terrain_mat.material_shininess);
+	labhelper::setUniformSlow(shaderProgram, "material_reflectivity", terrain_mat.material_reflectivity);
+	labhelper::setUniformSlow(shaderProgram, "material_metalness", terrain_mat.material_metalness);
+	labhelper::setUniformSlow(shaderProgram, "material_color", terrain_mat.material_color);
+
 	labhelper::drawFullScreenQuad();
+
 }
 
 
-bool handleEvents(void)
-{
+bool handleEvents(void) {
 	// check events (keyboard among other)
 	SDL_Event event;
 	bool quitEvent = false;
@@ -105,7 +117,7 @@ bool handleEvents(void)
 		if (event.type == SDL_QUIT || (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_ESCAPE)) {
 			quitEvent = true;
 		}
-	/*	if (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_g) {
+		/*if (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_g) {
 			showUI = !showUI;
 		}*/
 		/*if (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_r) {
@@ -153,80 +165,14 @@ bool handleEvents(void)
 	return quitEvent;
 }
 
-/*
-bool handleEvents(void) {
-	// check events (keyboard among other)
-	SDL_Event event;
-	bool quitEvent = false;
 
-	// Allow ImGui to capture events.
-	ImGuiIO& io = ImGui::GetIO();
-
-	while (SDL_PollEvent(&event)) {
-		ImGui_ImplSdlGL3_ProcessEvent(&event);
-
-		if (event.type == SDL_QUIT || (event.type == SDL_KEYUP && event.key.keysym.sym == SDLK_ESCAPE)) {
-			quitEvent = true;
-		}
-		
-		if (!io.WantCaptureMouse) {
-			if (event.type == SDL_MOUSEMOTION) {
-				static int prev_xcoord = event.motion.x;
-				static int prev_ycoord = event.motion.y;
-				int delta_x = event.motion.x - prev_xcoord;
-				int delta_y = event.motion.y - prev_ycoord;
-				if (event.button.button & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-					float rotationSpeed = 0.005f;
-					mat4 yaw = rotate(rotationSpeed * -delta_x, up);
-					//mat4 pitch = rotate(rotationSpeed * -delta_y, normalize(cross(forward, up)));
-					forward = vec3(yaw * vec4(forward, 0.0f));
-
-					//vec4 newUp = pitch * vec4(up.x, up.y, up.z, 0);
-					//up = vec3(newUp.x, newUp.y, newUp.z);
-					right = normalize(cross(forward, up));
-				}
-				prev_xcoord = event.motion.x;
-				prev_ycoord = event.motion.y;
-			}
-		}
-	}
-
-	if (!io.WantCaptureKeyboard)
-	{
-		// check keyboard state (which keys are still pressed)
-		const uint8_t *state = SDL_GetKeyboardState(nullptr);
-		right = cross(eye, up);
-		const float speed = 0.1f; 
-		if (state[SDL_SCANCODE_W]) {
-			eye += eye*speed;
-		}
-		if (state[SDL_SCANCODE_S]) {
-			eye -= speed * eye;
-		}
-		if (state[SDL_SCANCODE_A]) {
-			eye -= speed * right;
-		}
-		if (state[SDL_SCANCODE_D]) {
-			eye += speed * right;
-		}
-		if (state[SDL_SCANCODE_Q]) {
-			eye -= speed * up;
-		}
-		if (state[SDL_SCANCODE_E]) {
-			eye += speed * up;
-		}
-	}
-
-	return quitEvent;
-}
-*/
 void gui() {
 	// Inform imgui of new frame
 	ImGui_ImplSdlGL3_NewFrame(g_window);
 	/////////////////////////////////////////////////////////////////////////////
 	//// Raymarcher settings
 	/////////////////////////////////////////////////////////////////////////////
-	if (ImGui::CollapsingHeader("Pathtracer", "pathtracer_ch", true, true))
+	if (ImGui::CollapsingHeader("Raymarching", "pathtracer_ch", true, true))
 	{
 		ImGui::SliderFloat("Ground Threshold", &ground_threshold, 0.01f, 1.0f);
 		ImGui::SliderFloat("Noise Val at Count#", &count_check, 0.0f, 100);
@@ -235,10 +181,9 @@ void gui() {
 	ImGui::Render();
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
+	
 	g_window = labhelper::init_window_SDL("Raymarching", 1280, 720);
-
 	initialize();
 
 	bool stopRendering = false;
@@ -257,6 +202,7 @@ int main(int argc, char *argv[])
 		// check events (keyboard among other)
 		stopRendering = handleEvents();
 	}
+
 	// Shut down everything. This includes the window and all other subsystems.
 	labhelper::shutDown(g_window);
 	return 0;          
