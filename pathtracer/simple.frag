@@ -30,15 +30,15 @@ uniform float material_emission;
 #define PI 3.14159265359
 //---------First light---------------------------
 //vec3 sun_dir = vec3(0,-1, 0.4);
-vec3 sun_dir = vec3(-0.624695,0.668521,-0.624695);
+vec3 sun_dir = vec3(0.624695,0.668521,0.624695);
 vec3 sun_color = vec3(1.0,0.89, 0.76);
 float sun_intensity = 1.4;
 //---------Second light---------------------------
 vec3 sky_dir = vec3(0, 1, 0);
-vec3 sky_color = vec3(0.5,0.65,0.7);
+vec3 sky_color = vec3(0.4,0.66,1);
 float sky_intensity = 0.4;
 //---------Third light ("Ambient")----------------
-vec3 indirect_dir = vec3(0.624695, 0 ,0.624695);
+vec3 indirect_dir = vec3(-0.624695, 0 ,-0.624695);
 vec3 indirect_color = normalize(vec3(0.9,0.6,0.2)*material_color);//Sun*scene.
 float indirect_intensity = 0.2;
 
@@ -61,7 +61,7 @@ uniform float resolution_y;
 //UV-coordinates-----------------------------
 in vec2 fragCoord; // image plane (-1,1)
 //-----------Noise Properties--------------
-const int octaves = 8;
+const int octaves = 10;
 const int ITR = 100;
 // const float FAR = 5.0;
 // const float dt = FAR/float(ITR);
@@ -144,7 +144,7 @@ vec4 fbm_4( in vec3 x ) {
     float frequency = 2.0;
     float gain = 0.5;
     float value = 0.0;
-    float amplitude = 0.5;
+    float amplitude = 0.9;
     vec3 derivative = vec3(0.0);
     mat3  m = mat3(1.0,0.0,0.0,
                    0.0,1.0,0.0,
@@ -287,12 +287,12 @@ vec3 calculateDirectIllumiunation(vec3 wo, vec3 n, vec3 light_dir, vec3 light_co
 
 
 vec3 fog(in vec3 landscape_color, in float distance, in vec3 rayDir, in vec3 sunDir) {
-    float fog_intensity = 0.08;
+    float fog_intensity = 0.09;
     float fogAmount = 1.0 - exp(-distance * fog_intensity);
     //Is there sun or is it in shadow
     float sunAmount = max( dot(rayDir, sunDir), 0.0);
     //We want the fog to be affected by the intensity of the sunlight.
-    float sunIntensity = pow(sunAmount, 8.0);
+    float sunIntensity = pow(sunAmount, 6.0);
     vec3 fogColor = mix(sky_color, sun_color, sunIntensity);
     return mix(landscape_color, fogColor, fogAmount);
 } 
