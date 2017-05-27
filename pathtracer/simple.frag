@@ -18,17 +18,6 @@ uniform vec3 forward;
 //////////////////////////////////////////////////////////
 ////// Lighting
 //////////////////////////////////////////////////////////
-//---------Constants-----------------------------
-#define PI 3.14159265359
-//---------First light---------------------------
-//vec3 sun_dir = vec3(0,-1, 0.4);
-vec3  sun_dir = vec3(-0.624695,0.468521,-0.624695);
-vec3 sun_color = vec3(0.9,0.6,0.2);
-float sun_intensity = 1.5;
-//---------Second light---------------------------
-vec3 sky_dir = vec3(0, 1, 0.2);
-vec3 sky_color = vec3(1, 1, 1);
-float sky_intensity = 0.2;
 //---------Terrain Material-----------------------
 uniform vec3 material_color;
 uniform float material_reflectivity;
@@ -36,6 +25,22 @@ uniform float material_metalness;
 uniform float material_fresnel;
 uniform float material_shininess;
 uniform float material_emission;
+
+//---------Constants-----------------------------
+#define PI 3.14159265359
+//---------First light---------------------------
+//vec3 sun_dir = vec3(0,-1, 0.4);
+vec3 sun_dir = vec3(-0.624695,0.668521,-0.624695);
+vec3 sun_color = vec3(0.9,0.6,0.2);
+float sun_intensity = 1.4;
+//---------Second light---------------------------
+vec3 sky_dir = vec3(0, 1, 0);
+vec3 sky_color = vec3(0.2 , 0.4, 1.0);
+float sky_intensity = 0.4;
+//---------Third light ("Ambient")----------------
+vec3 indirect_dir = vec3(0.624695, 0 ,0.624695);
+vec3 indirect_color = normalize(vec3(0.9,0.6,0.2)*material_color);//Sun*scene.
+float indirect_intensity = 0.2;
 
 /////////////////////////////////////////////////////////
 /////Raymarcher parameters
@@ -52,181 +57,20 @@ float f = 1.67f; //focal length
 uniform float aspect_ratio;
 uniform float resolution_x;
 uniform float resolution_y;
+
 //UV-coordinates-----------------------------
 in vec2 fragCoord; // image plane (-1,1)
 //-----------Noise Properties--------------
-const int octaves = 10;
-const int ITR = 150;
-const float FAR = 5.0;
-const float dt = FAR/float(ITR);
+const int octaves = 8;
+const int ITR = 100;
+// const float FAR = 5.0;
+// const float dt = FAR/float(ITR);
 const mat3 m3  = mat3( 0.00,  0.80,  0.60,
                       -0.80,  0.36, -0.48,
                       -0.60, -0.48,  0.64 );
 const mat3 m3i = mat3( 0.00, -0.80, -0.60,
                        0.80,  0.36, -0.48,
                        0.60, -0.48,  0.64 );
-
-
-
-/*//////////////////////////////////////////////////////
-///// Light calculation functions
-*///////////////////////////////////////////////////////
-
-float F(vec3 wi, vec3 n) {
-	//Calculate fresnel term F
-	float R0 = material_fresnel;
-	return R0 + (1.0 - R0) * pow(1.0 - dot(n, wi), 5.0);
-}
-
-float D(vec3 wi, vec3 wo, vec3 n) {
-	//Calculate microfacet distribution term D
-	vec3 wh = normalize(wi + wo);		//half-angle between inc- and out. directions
-	float s = material_shininess;
-	return ((s + 2) / (2 * PI)) * (pow(dot(n, wh), s));
-}
-
-float G(vec3 wi, vec3 wo, vec3 n) {
-	vec3 wh = normalize(wi + wo);		//half-angle between inc- and out. directions
-	//Calculate the masking term G
-	float term1 = dot(n, wh)*dot(n, wo) / dot(wo, wh);
-	float term2 = dot(n, wh)*dot(n, wi) / dot(wo, wh);
-	return min(1, min(2 * term1, 2 * term2));
-}
-
-vec3 calculateDirectIllumiunation(vec3 wo, vec3 n) {
-	///////////////////////////////////////////////////////////////////////////
-	// Task 1.2 - Calculate the radiance Li from the light, and the direction
-	//            to the light. If the light is backfacing the triangle, 
-	//            return vec3(0); 
-	///////////////////////////////////////////////////////////////////////////
-	vec3 wi = normalize(-eye + sun_dir); // uses position but we have sun...
-	float liCond = dot(wi, n);
-	if (liCond <= 0)	return vec3(0);
-	// Disregard distance to directional light!
-	vec3 Li = sun_intensity * sun_color;
-
-	///////////////////////////////////////////////////////////////////////////
-	// Task 1.3 - Calculate the diffuse term and return that as the result
-	///////////////////////////////////////////////////////////////////////////
-	vec3 diffuseBRDF = material_color / PI ;
-	vec3 diffuse_term = diffuseBRDF *  abs(liCond) * Li;
-
-	///////////////////////////////////////////////////////////////////////////
-	// Task 2 - Calculate the Torrance Sparrow BRDF and return the light 
-	//          reflected from that instead
-	///////////////////////////////////////////////////////////////////////////
-	
-	float F = F(wi, n);
-	float D = D(wi, wo, n);
-	float G = G(wi, wo, n);
-
-	// Create the microfacet term with BRDF
-	float brdf = (F*D*G) / (4 * dot(n, wo)*dot(n, wi));
-	vec3 brdf_light = brdf * dot(n, wi) * Li;
- 
-
-	///////////////////////////////////////////////////////////////////////////
-	// Task 3 - Make your shader respect the parameters of our material model.
-	///////////////////////////////////////////////////////////////////////////
-	float m = material_metalness;
-	float r = material_reflectivity;
-
-	vec3 dielectric_term = (brdf * dot(n,wi)*Li) + ((1 - F) * diffuse_term);
-	vec3 metal_term = brdf * material_color * dot(n, wi) * Li;
-	vec3 microfacet_term = m * metal_term + (1 - m) * dielectric_term;
-	vec3 light = (r * microfacet_term) + ((1 - r) * diffuse_term);
-	return light;
-}
-//SAFE COPY
-// vec3 calculateDirectIllumiunation(vec3 wo, vec3 n) {
-// 	///////////////////////////////////////////////////////////////////////////
-// 	// Task 1.2 - Calculate the radiance Li from the light, and the direction
-// 	//            to the light. If the light is backfacing the triangle, 
-// 	//            return vec3(0); 
-// 	///////////////////////////////////////////////////////////////////////////
-// 	vec3 wi = normalize(-viewSpacePosition + viewSpaceLightPosition);
-// 	float liCond = dot(wi, n);
-// 	if (liCond <= 0)	return vec3(0);
-// 	float d = distance(viewSpaceLightPosition, viewSpacePosition );
-// 	vec3 Li = point_light_intensity_multiplier * point_light_color * (1.0 / (d*d));
-
-// 	///////////////////////////////////////////////////////////////////////////
-// 	// Task 1.3 - Calculate the diffuse term and return that as the result
-// 	///////////////////////////////////////////////////////////////////////////
-// 	vec3 diffuseBRDF = material_color / PI ;
-// 	vec3 diffuse_term = diffuseBRDF *  abs(liCond) * Li;
-
-// 	///////////////////////////////////////////////////////////////////////////
-// 	// Task 2 - Calculate the Torrance Sparrow BRDF and return the light 
-// 	//          reflected from that instead
-// 	///////////////////////////////////////////////////////////////////////////
-	
-// 	float F = F(wi, n);
-// 	float D = D(wi, wo, n);
-// 	float G = G(wi, wo, n);
-
-// 	// Create the microfacet term with BRDF
-// 	float brdf = (F*D*G) / (4 * dot(n, wo)*dot(n, wi));
-// 	vec3 brdf_light = brdf * dot(n, wi) * Li;
- 
-
-// 	///////////////////////////////////////////////////////////////////////////
-// 	// Task 3 - Make your shader respect the parameters of our material model.
-// 	///////////////////////////////////////////////////////////////////////////
-// 	float m = material_metalness;
-// 	float r = material_reflectivity;
-
-// 	vec3 dielectric_term = (brdf * dot(n,wi)*Li) + ((1 - F) * diffuse_term);
-// 	vec3 metal_term = brdf * material_color * dot(n, wi) * Li;
-// 	vec3 microfacet_term = m * metal_term + (1 - m) * dielectric_term;
-// 	vec3 light = (r * microfacet_term) + ((1 - r) * diffuse_term);
-// 	return light;
-// }
-
-// vec2 toSpherical(vec3 dir) {
-// 	// Calculate the spherical coordinates of the direction
-// 	float theta = acos(max(-1.0f, min(1.0f, dir.y)));
-// 	float phi = atan(dir.z, dir.x);
-// 	if (phi < 0.0f) phi = phi + 2.0f * PI;
-// 	return vec2(phi / (2.0 *PI), theta / PI);
-// }
-
-// vec3 calculateIndirectIllumination(vec3 wo, vec3 n) {
-// 	///////////////////////////////////////////////////////////////////////////
-// 	// Task 5 - Lookup the irradiance from the irradiance map and calculate
-// 	//          the diffuse reflection
-// 	///////////////////////////////////////////////////////////////////////////
-// 	// Calculate the world-space direction from the camera to that position
-// 	vec3 dir = normalize(viewInverse.xyz * n);
-// 	vec2 lookup = toSpherical(dir);
-// 	vec4 irradiance = environment_multiplier * texture(irradianceMap, lookup);
-// 	vec3 diffuse_term = material_color * (1.0 / PI) * irradiance.xyz;
-
-
-// 	///////////////////////////////////////////////////////////////////////////
-// 	// Task 6 - Look up in the reflection map from the perfect specular 
-// 	//          direction and calculate the dielectric and metal terms. 
-// 	///////////////////////////////////////////////////////////////////////////
-// 	vec3 wi = reflect(-wo, n);
-
-// 	float s = material_shininess;
-// 	float roughness = sqrt(sqrt(2 / (s + 2)));
-	
-// 	float F = F(wi, n); // view space
-// 	mat3 transformation = mat3(viewInverse);
-// 	wi = normalize(transformation * wi);
-// 	vec2 lookup2 = toSpherical(wi);
-	
-// 	vec3 Li = environment_multiplier * textureLod(reflectionMap, lookup2, roughness * 7.0).xyz;
-	
-// 	float m = material_metalness;
-// 	float r = material_reflectivity;
-// 	vec3 dielectric_term = F * Li + (1 - F) * diffuse_term;
-// 	vec3 metal_term = F * material_color * Li;
-// 	vec3 microfacet_term = m * metal_term + (1 - m) * dielectric_term;
-// 	vec3 derp = r * microfacet_term + (1 - r) * diffuse_term;
-// 	return derp;
-// }
 
 /*//////////////////////////////////////////////////////
 ///// Noise calculation
@@ -319,33 +163,48 @@ vec4 fbm_4( in vec3 x ) {
 return vec4(value,derivative);
 }
 
+float sdPlane( vec3 p, vec4 n ) {
+  // n must be normalized
+  return dot(p,n.xyz) + n.w;
+}
+
+// Calculate shortest distance, 
+// Each input is the distance to a surface.
+float minDist(float d1, float d2) {
+	return (d1 < d2) ? d1 : d2;
+}
+
+
+//Raymarches fractal brownian motion noise currently.
 void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative) {
+	
+	vec3 pos = vec3(0);
+
 	// March.
 	for( int i = 0 ; i < ITR; i++ ) {
         // New position.
-        vec3 pos = ro + t * rd;
+        pos = ro + t * rd;
         // Calculate sdf.
         // Find fbm and derivatives:
         vec4 fbm_noise = fbm_4(pos);
         float sdf_noise  = fbm_noise.x * 0.5 + 0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
         float sdf_floor  = pos.y + 0.6;
-        float sdf_val    = sdf_floor + sdf_noise;
-        //float sdf_sphere = length(vec3(0.0) - pos); // Radius 1, center at (0,0,0)
-        //float sdf_val    = sdf_sphere * sdf_noise;
+        float dist    = sdf_floor + sdf_noise;
 
         // Iso-level check.d
-		if ( sdf_val < ground_threshold ) {
-			derivative = fbm_noise.yzw;
+		if ( dist < ground_threshold ) {
+			derivative = normalize( vec3(1) + fbm_noise.yzw);
 			break;
 		};
        	
         // Step forward and increment debug ctr.
-        t   += dt;
+        t   += (dist - 0.999*ground_threshold);
         ctr += 1.0;
 	}
 	
 }
 
+//Old function for an approximate normal.
 vec3 terrainNormal(vec3 v1) {
 	vec3 v2 = { 0,0,0 };
 	v2.x = v1.x;
@@ -360,6 +219,77 @@ vec3 terrainNormal(vec3 v1) {
 	return normalize(v2);
 }
 
+
+/*//////////////////////////////////////////////////////
+///// Light calculation functions
+*///////////////////////////////////////////////////////
+
+float F(vec3 wi, vec3 n) {
+    //Calculate fresnel term F
+    float R0 = material_fresnel;
+    return R0 + (1.0 - R0) * pow(1.0 - dot(n, wi), 5.0);
+}
+
+float D(vec3 wi, vec3 wo, vec3 n) {
+    //Calculate microfacet distribution term D
+    vec3 wh = normalize(wi + wo);       //half-angle between inc- and out. directions
+    float s = material_shininess;
+    return ((s + 2) / (2 * PI)) * (pow(dot(n, wh), s));
+}
+
+float G(vec3 wi, vec3 wo, vec3 n) {
+    vec3 wh = normalize(wi + wo);       //half-angle between inc- and out. directions
+    //Calculate the masking term G
+    float term1 = dot(n, wh)*dot(n, wo) / dot(wo, wh);
+    float term2 = dot(n, wh)*dot(n, wi) / dot(wo, wh);
+    return min(1, min(2 * term1, 2 * term2));
+}
+
+vec3 calculateDirectIllumiunation(vec3 wo, vec3 n, vec3 light_dir, vec3 light_color, float light_intensity) {
+    ///////////////////////////////////////////////////////////////////////////
+    // Calculate the radiance Li from the light, and the direction
+    //            to the light. If the light is backfacing, 
+    //            return vec3(0); 
+    ///////////////////////////////////////////////////////////////////////////
+    vec3 wi = normalize(light_dir); //Direction Toward light source.
+    float liCond = dot(wi, n);
+    if (liCond <= 0)    return vec3(0);
+    // Disregard distance to directional light!
+    vec3 Li = light_intensity * light_color;
+    // Diffuse term  does not need BRDF since we do gamma correction.
+    vec3 diffuse_term = clamp(material_color *  abs(liCond) * Li, 0.0, 1.0);
+    return diffuse_term;
+    //We don't care about the BRDF because it gives practically the same light.
+    // ///////////////////////////////////////////////////////////////////////////
+    // // Calculate the Torrance Sparrow BRDF.
+    // ///////////////////////////////////////////////////////////////////////////
+    
+    // float F = F(wi, n);
+    // float D = D(wi, wo, n);
+    // float G = G(wi, wo, n);
+
+    // // Create the microfacet term with BRDF
+    // float brdf = (F*D*G) / (4 * dot(n, wo)*dot(n, wi));
+    // vec3 brdf_light = brdf * dot(n, wi) * Li;
+
+    // ///////////////////////////////////////////////////////////////////////////
+    // // Respect the parameters of the material model.
+    // ///////////////////////////////////////////////////////////////////////////
+    // float m = material_metalness;
+    // float r = material_reflectivity;
+
+    // vec3 dielectric_term = (brdf * dot(n,wi)*Li) + ((1 - F) * diffuse_term);
+    // vec3 metal_term = brdf * material_color * dot(n, wi) * Li;
+    // vec3 microfacet_term = m * metal_term + (1 - m) * dielectric_term;
+    // vec3 light = (r * microfacet_term) + ((1 - r) * diffuse_term);
+    // return light;
+}
+
+//TODO:
+vec3 fog(in vec3 landscape_color, in float distance, in vec3 rayDir, in vec3 sunDir) {
+    return vec3(0);
+} 
+
 void shade (vec3 ro, vec3 rd) {
 	//Perform raymarching
   	float ctr = 0.0;
@@ -367,16 +297,33 @@ void shade (vec3 ro, vec3 rd) {
   	float t = 0;
     raymarch(ro, rd, ctr, t, derivative);
 
-    vec3 normal = terrainNormal(derivative);
+    // The normal will be the max slope since we're using distance fields.
+    vec3 normal = derivative.xyz; //terrainNormal(derivative);
     // Shade.
 	
 	// fragmentColor = vec4(vec3(ctr / float(ITR)), 1.0);
     // do amazing visuals
-    vec3 color = calculateDirectIllumiunation(-normalize(ro + rd * t), normal) + 0.8*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));;
+   vec3 wo =  -normalize(ro + rd * t);
+   //Regular lighting
+   vec3 colorSun = calculateDirectIllumiunation(wo, normal, sun_dir, sun_color, sun_intensity);
+   vec3 colorInd = calculateDirectIllumiunation(wo, normal, indirect_dir, indirect_color, indirect_intensity);
+   vec3 color = colorSun + colorInd; //+ 0.6*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));
 
+   //Other (simple?) lighting.
+   // float sun = clamp(dot( normal, sun_dir), 0.0, 1.0);
+   float sky = clamp(0.5 + 0.5 * normal.y, 0.0, 1.0);
+   // float ind = clamp(dot( normal, normalize(indirect_dir)), 0.0, 1.0);
+
+   vec3 lin =// sun*sun_color*sun_intensity;
+  /* lin +=*/ sky*sky_color*sky_intensity;
+   // lin += ind*indirect_color*indirect_intensity;
+   // vec3     color = material_color * lin;
+   color += lin*material_color + 0.4*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));;
+    
+ 
+   // + 0.6*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));
     // gamma correction
     color = pow( color, vec3(1.0/2.2) );
-
 
     // final step, display (and perhaps color grade)
     fragmentColor = vec4(color.xyz, 1);
