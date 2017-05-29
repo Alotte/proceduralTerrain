@@ -61,7 +61,7 @@ uniform float resolution_y;
 //UV-coordinates-----------------------------
 in vec2 fragCoord; // image plane (-1,1)
 //-----------Noise Properties--------------
-const int octaves = 10;
+const int octaves = 6;
 const int ITR = 100;
 // const float FAR = 5.0;
 // const float dt = FAR/float(ITR);
@@ -125,7 +125,7 @@ vec4 noise( in vec3 x ) {
     					k6 * u.z * u.x + 
     					k7 * u.x * u.y * u.z), 
    					// Analytical noise derivative at given point.
-                      2.0 * du * vec3( k1 + k4 * u.y + k6 * u.z + k7 * u.y * u.z,
+                      2.0 * du * vec3(k1 + k4 * u.y + k6 * u.z + k7 * u.y * u.z,
                                       k2 + k5 * u.z + k4 * u.x + k7 * u.z * u.x,
                                       k3 + k6 * u.x + k5 * u.y + k7 * u.x *u.y ) );
     // return -1.0 + 2.0 * (k0 + 
@@ -189,20 +189,31 @@ void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative
         vec4 fbm_noise = fbm_4(pos);
         float sdf_noise  = fbm_noise.x * 0.5 + 0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
         float sdf_floor  = pos.y + 0.6;
-        float dist    = sdf_floor + sdf_noise;
+        float dist_noise    = sdf_floor + sdf_noise ;
+    
 
-        // Iso-level check.d
-		if ( dist < ground_threshold ) {
-			derivative = normalize( vec3(1) + fbm_noise.yzw);
+        // Iso-level check return
+		if ( dist_noise < ground_threshold ) {
+            vec3 derivative_floor = vec3(0,1,0);
+            vec3 derivative_noise = fbm_noise.yzw;
+			derivative = normalize( derivative_floor + derivative_noise);
 			break;
 		};
+
+        float dist_ground = pos.y + 1;
+        if (dist_ground < ground_threshold) {
+            vec3 derivative_floor = vec3(0,1,0);
+            derivative = derivative_floor;
+            break;
+        }
+        float min_dist = min(dist_ground, dist_noise);
        	
         // Step forward and increment debug ctr.
-        t   += (dist - 0.999*ground_threshold);
+        t   += (min_dist - 0.999*ground_threshold);
         ctr += 1.0;
 	}
-	
 }
+
 
 //Old function for an approximate normal.
 vec3 terrainNormal(vec3 v1) {
@@ -308,7 +319,9 @@ void shade (vec3 ro, vec3 rd) {
     vec3 normal = derivative.xyz; //terrainNormal(derivative);
     // Shade.
 	
-	// fragmentColor = vec4(vec3(ctr / float(ITR)), 1.0);
+    //Degug lighing / Ambient occlusion?
+	// fragmentColor = vec4(1 - vec3(ctr / float(ITR)), 1.0);
+
     // do amazing visuals
     vec3 wo =  -normalize(ro + rd * t);
     //Regular lighting
