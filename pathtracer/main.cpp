@@ -35,8 +35,8 @@ vec3 forward	= vec3(0, 0, 1);
 ///////////////////////////////////////////////////////////////////////////////
 float ground_threshold = 0.5f;
 float count_check = 0.0f;
-int max_steps = 100;
-float far_plane = 35.0f;
+int max_steps = 200;
+float far_plane = 40.0f;
 Material terrain_mat;
 
 ///////////////////////////////////////////////////////////////////////////////
