@@ -35,8 +35,8 @@ vec3 forward	= vec3(0, 0, 1);
 ///////////////////////////////////////////////////////////////////////////////
 float ground_threshold = 0.5f;
 float count_check = 0.0f;
-int max_steps = 200;
-float far_plane = 40.0f;
+int max_steps = 120;
+float far_plane = 100.0f;
 Material terrain_mat;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -183,7 +183,7 @@ void gui() {
 	if (ImGui::CollapsingHeader("Raymarching", "pathtracer_ch", true, true))
 	{
 		ImGui::SliderFloat("Ground Threshold", &ground_threshold, 0.01f, 1.0f);
-		ImGui::SliderFloat("Far Plane", &far_plane, 10.0f, 70.0f);
+		ImGui::SliderFloat("Far Plane", &far_plane, 10.0f, 500.0f);
 		ImGui::SliderInt("Max Raymarcher Steps", &max_steps, 10, 1000);
 	}
 
