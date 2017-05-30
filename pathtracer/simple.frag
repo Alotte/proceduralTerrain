@@ -30,7 +30,7 @@ uniform float material_emission;
 #define PI 3.14159265359
 //---------First light---------------------------
 //vec3 sun_dir = vec3(0,-1, 0.4);
-vec3 sun_dir = vec3(0.624695,0.668521,0.624695);
+vec3 sun_dir = vec3(0.624695,0.58521,0.624695);
 vec3 sun_color = vec3(1.0,0.89, 0.76);
 float sun_intensity = 1.4;
 //---------Second light---------------------------
@@ -61,7 +61,7 @@ uniform float resolution_y;
 //UV-coordinates-----------------------------
 in vec2 fragCoord; // image plane (-1,1)
 //-----------Noise Properties--------------
-const int octaves = 8;
+const int octaves = 9;
 const int ITR = max_steps;
 // const float FAR = 5.0;
 // const float dt = FAR/float(ITR);
@@ -141,10 +141,10 @@ vec4 noise( in vec3 x ) {
 // Returns the fractal brownian motion noise and its three derivatives.
 vec4 fbm_4( in vec3 x ) {
 
-    float frequency = 2.0;
-    float gain = 0.5;
-    float value = 0.0;
-    float amplitude = 0.9;
+    float frequency = 2.0f;
+    float gain = 0.5f;
+    float value = 0.0f;
+    float amplitude = 0.9f;
     vec3 derivative = vec3(0.0);
     mat3  m = mat3(1.0,0.0,0.0,
                    0.0,1.0,0.0,
@@ -179,39 +179,71 @@ float minDist(float d1, float d2) {
 void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative) {
 	
 	vec3 pos = vec3(0);
+    //Uses this for interpolation
+    float min_dist = 0;
+    float dist_ground = 0;
+    float dist_noise = 0;
+    float sdf_noise = 0;
+    float sdf_floor = 0;
 
 	// March.
 	for( int i = 0 ; i < ITR; i++ ) {
         // New position.
         pos = ro + t * rd;
 
+        //Stop if we reach the far-plane.
         if (length(t * rd) > far_plane) {
             break;
         }
+        //-------------------------------------------------------------
+        //---------Noise distance function-----------------------------
+        //-------------------------------------------------------------
 
-        // Calculate sdf.
-        // Find fbm and derivatives:
+        // The distance to the noise.
         vec4 fbm_noise = fbm_4(pos);
-        float sdf_noise  = fbm_noise.x * 0.5 + 0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
-        float sdf_floor  = pos.y + 0.6;
-        float dist_noise    = sdf_floor + sdf_noise ;
+        sdf_noise  = fbm_noise.x * 0.5 + 0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
+        // The floor distance function for noise 
+        sdf_floor  = pos.y + 0.6;
+        // Add the noise and floor for surface.
+        dist_noise    = sdf_floor + sdf_noise ;
 
-        // Iso-level check return
-		if ( dist_noise < ground_threshold ) {
+        //Noise surface was found
+		if ( dist_noise <= ground_threshold ) {
+
+            // TODO: Add some xtra steps for accuracy!
+            // for (int j = 0; j < 10; j++) {
+            //     //Interpolate for accuracy
+            //     float interpolated_dist = t - min_dist + 
+
+            //     ctr +=1;
+            // }
+           
+            //Derivative for the ground.
             vec3 derivative_floor = vec3(0,1,0);
+            //Derivative of the noise.
             vec3 derivative_noise = fbm_noise.yzw;
 			derivative = normalize( derivative_floor + derivative_noise);
 			break;
 		};
 
-        float dist_ground = pos.y + 1;
-        if (dist_ground < ground_threshold) {
+        //--------------------------------------------------------------
+        //---------Ground distance function-----------------------------
+        //--------------------------------------------------------------
+
+        //Distance function of the ground
+        dist_ground = pos.y + 1.1;
+
+        //Ground surface was found.
+        if (dist_ground <= ground_threshold) {
+            //Floor derivative.
             vec3 derivative_floor = vec3(0,1,0);
             derivative = derivative_floor;
             break;
         }
-        //Calculate which distance function is closest.
-        float min_dist = min(dist_ground, dist_noise);
+        //--------------------------------------------------------------
+        //---------Calculate the closest structure's distance-----------
+        //--------------------------------------------------------------
+        min_dist = min(dist_ground, dist_noise);
        	
         // Step forward the shortest distance seen.
         t   += (min_dist - 0.979*ground_threshold);
@@ -274,7 +306,7 @@ vec3 calculateDirectIllumiunation(vec3 wo, vec3 n, vec3 light_dir, vec3 light_co
 
 
 vec3 fog(in vec3 landscape_color, in float distance, in vec3 rayDir, in vec3 sunDir) {
-    float fog_intensity = 0.09;
+    float fog_intensity = 0.04;
     float fogAmount = 1.0 - exp(-distance * fog_intensity);
     //Is there sun or is it in shadow
     float sunAmount = max( dot(rayDir, sunDir), 0.0);
@@ -296,13 +328,17 @@ void shade (vec3 ro, vec3 rd) {
     // Shade.
 	
     //Degug lighing / Ambient occlusion?
-	// fragmentColor = vec4(1 - vec3(ctr / float(ITR)), 1.0);
+	// fragmentColor = vec4(1 - vec3(ctr / float(ITR)), 1.0)
+    vec3 occlusion =  1 - vec3(ctr / float(ITR));
+    vec3 ambient_occl_deluxe = vec3(pow(occlusion.x,2.0));
 
     // do amazing visuals
     vec3 wo =  -normalize(ro + rd * t);
     //Regular lighting
-    vec3 colorSun = calculateDirectIllumiunation(wo, normal, sun_dir, sun_color, sun_intensity);
-    vec3 colorInd = calculateDirectIllumiunation(wo, normal, indirect_dir, indirect_color, indirect_intensity);
+    vec3 colorSun = calculateDirectIllumiunation(
+            wo, normal, sun_dir, sun_color, sun_intensity);
+    vec3 colorInd = calculateDirectIllumiunation(
+            wo, normal, indirect_dir, indirect_color, indirect_intensity);
     vec3 color = colorSun + colorInd; //+ 0.6*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));
 
     //Other (simple?) lighting.
@@ -316,8 +352,9 @@ void shade (vec3 ro, vec3 rd) {
     // vec3     color = material_color * lin;
 
     color += lin*material_color; //+ 0.4*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));;
-
     //Add fog
+    color *=ambient_occl_deluxe;
+    // color += 0.1*occlusion;
     color = fog(color, length(rd * t), rd, sun_dir);
 
     // + 0.6*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));
