@@ -30,12 +30,18 @@ const float speed = 0.1f;
 vec3 eye = vec3(0, 0, -2);
 vec3 right		= vec3(1, 0, 0);
 vec3 forward	= vec3(0, 0, 1);
+///////////////////////////////////////////////////////////////////////////////
 // Parameters for the raymarcher
+///////////////////////////////////////////////////////////////////////////////
 float ground_threshold = 0.5f;
 float count_check = 0.0f;
-float max_steps = 1000.0f;
+int max_steps = 100;
+float far_plane = 35.0f;
 Material terrain_mat;
-//Lights 
+
+///////////////////////////////////////////////////////////////////////////////
+// Lighting
+///////////////////////////////////////////////////////////////////////////////
 //First light
 vec3 sun_dir = vec3(0,-1, 0.4);
 vec3 sun_color = vec3(0.9,0.6,0.2);
@@ -103,6 +109,8 @@ void display(void) {
 	labhelper::setUniformSlow(shaderProgram, "material_reflectivity", terrain_mat.material_reflectivity);
 	labhelper::setUniformSlow(shaderProgram, "material_metalness", terrain_mat.material_metalness);
 	labhelper::setUniformSlow(shaderProgram, "material_color", terrain_mat.material_color);
+	labhelper::setUniformSlow(shaderProgram, "far_plane", far_plane);
+	// labhelper::setUniformSlow(shaderProgram, "amplitude", noise_amplitude);
 
 	labhelper::drawFullScreenQuad();
 
@@ -175,8 +183,10 @@ void gui() {
 	if (ImGui::CollapsingHeader("Raymarching", "pathtracer_ch", true, true))
 	{
 		ImGui::SliderFloat("Ground Threshold", &ground_threshold, 0.01f, 1.0f);
-		ImGui::SliderFloat("Noise Val at Count#", &count_check, 0.0f, 100);
+		ImGui::SliderFloat("Far Plane", &far_plane, 10.0f, 70.0f);
+		ImGui::SliderInt("Max Raymarcher Steps", &max_steps, 10, 1000);
 	}
+
 	// Render the GUI.
 	ImGui::Render();
 }

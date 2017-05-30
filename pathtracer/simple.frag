@@ -46,9 +46,9 @@ float indirect_intensity = 0.2;
 /////Raymarcher parameters
 /////////////////////////////////////////////////////////
 uniform float ground_threshold;
-uniform float max_steps;
+uniform int max_steps;
 uniform float count_check;
-float step_size = 1.0f/max_steps;
+uniform float far_plane;
 float f = 1.67f; //focal length
 
 //////////////////////////////////////////////////////////
@@ -61,8 +61,8 @@ uniform float resolution_y;
 //UV-coordinates-----------------------------
 in vec2 fragCoord; // image plane (-1,1)
 //-----------Noise Properties--------------
-const int octaves = 6;
-const int ITR = 100;
+const int octaves = 8;
+const int ITR = max_steps;
 // const float FAR = 5.0;
 // const float dt = FAR/float(ITR);
 const mat3 m3  = mat3( 0.00,  0.80,  0.60,
@@ -184,13 +184,17 @@ void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative
 	for( int i = 0 ; i < ITR; i++ ) {
         // New position.
         pos = ro + t * rd;
+
+        if (length(t * rd) > far_plane) {
+            break;
+        }
+
         // Calculate sdf.
         // Find fbm and derivatives:
         vec4 fbm_noise = fbm_4(pos);
         float sdf_noise  = fbm_noise.x * 0.5 + 0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
         float sdf_floor  = pos.y + 0.6;
         float dist_noise    = sdf_floor + sdf_noise ;
-    
 
         // Iso-level check return
 		if ( dist_noise < ground_threshold ) {
@@ -206,10 +210,11 @@ void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative
             derivative = derivative_floor;
             break;
         }
+        //Calculate which distance function is closest.
         float min_dist = min(dist_ground, dist_noise);
        	
-        // Step forward and increment debug ctr.
-        t   += (min_dist - 0.999*ground_threshold);
+        // Step forward the shortest distance seen.
+        t   += (min_dist - 0.979*ground_threshold);
         ctr += 1.0;
 	}
 }
@@ -221,12 +226,6 @@ vec3 terrainNormal(vec3 v1) {
 	v2.x = v1.x;
 	v2.y = v1.y;
 	v2.z = 1;
-
-	// if (length(v2) == 0) {
-	// 	v2.x = -v1.y - v1.z;
-	// 	v2.y = v1.x;
-	// 	v2.z = v1.x;
-	// }
 	return normalize(v2);
 }
 
@@ -270,30 +269,7 @@ vec3 calculateDirectIllumiunation(vec3 wo, vec3 n, vec3 light_dir, vec3 light_co
     // Diffuse term  does not need BRDF since we do gamma correction.
     vec3 diffuse_term = clamp(material_color *  abs(liCond) * Li, 0.0, 1.0);
     return diffuse_term;
-    //We don't care about the BRDF because it gives practically the same light.
-    // ///////////////////////////////////////////////////////////////////////////
-    // // Calculate the Torrance Sparrow BRDF.
-    // ///////////////////////////////////////////////////////////////////////////
-    
-    // float F = F(wi, n);
-    // float D = D(wi, wo, n);
-    // float G = G(wi, wo, n);
-
-    // // Create the microfacet term with BRDF
-    // float brdf = (F*D*G) / (4 * dot(n, wo)*dot(n, wi));
-    // vec3 brdf_light = brdf * dot(n, wi) * Li;
-
-    // ///////////////////////////////////////////////////////////////////////////
-    // // Respect the parameters of the material model.
-    // ///////////////////////////////////////////////////////////////////////////
-    // float m = material_metalness;
-    // float r = material_reflectivity;
-
-    // vec3 dielectric_term = (brdf * dot(n,wi)*Li) + ((1 - F) * diffuse_term);
-    // vec3 metal_term = brdf * material_color * dot(n, wi) * Li;
-    // vec3 microfacet_term = m * metal_term + (1 - m) * dielectric_term;
-    // vec3 light = (r * microfacet_term) + ((1 - r) * diffuse_term);
-    // return light;
+    //We don't care about the BRDF because it gives practically the same light, we use gamma correction.
 }
 
 
