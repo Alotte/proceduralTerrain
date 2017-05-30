@@ -50,6 +50,7 @@ float sun_intensity = 1.5;
 vec3 sky_dir = vec3(0,-1,0);
 vec3 sky_color = vec3(0,0.8,0.2);
 float sky_intensity = 0.2;
+float soft_shadow_multiplier = 32.0f;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Load shaders, environment maps, models and so on
@@ -110,6 +111,7 @@ void display(void) {
 	labhelper::setUniformSlow(shaderProgram, "material_metalness", terrain_mat.material_metalness);
 	labhelper::setUniformSlow(shaderProgram, "material_color", terrain_mat.material_color);
 	labhelper::setUniformSlow(shaderProgram, "far_plane", far_plane);
+	labhelper::setUniformSlow(shaderProgram, "soft_shadow_multiplier", soft_shadow_multiplier);
 	// labhelper::setUniformSlow(shaderProgram, "amplitude", noise_amplitude);
 
 	labhelper::drawFullScreenQuad();
@@ -185,6 +187,7 @@ void gui() {
 		ImGui::SliderFloat("Ground Threshold", &ground_threshold, 0.01f, 1.0f);
 		ImGui::SliderFloat("Far Plane", &far_plane, 10.0f, 500.0f);
 		ImGui::SliderInt("Max Raymarcher Steps", &max_steps, 10, 1000);
+		ImGui::SliderFloat("Shadow softness", &soft_shadow_multiplier, 1, 128);
 	}
 
 	// Render the GUI.
