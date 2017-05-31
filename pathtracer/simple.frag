@@ -31,7 +31,7 @@ uniform float soft_shadow_multiplier;
 #define PI 3.14159265359
 //---------First light---------------------------
 //vec3 sun_dir = vec3(0,-1, 0.4);
-vec3 sun_dir = vec3(0.624695,0.4521,0.624695);
+vec3 sun_dir = vec3(0.624695,0.2,0.624695);
 vec3 sun_color = vec3(1.0,0.89, 0.76);
 float sun_intensity = 1.4;
 //---------Second light---------------------------
@@ -46,7 +46,7 @@ float indirect_intensity = 0.2;
 /////////////////////////////////////////////////////////
 /////Raymarcher parameters
 /////////////////////////////////////////////////////////
-uniform float ground_threshold;
+const float ground_threshold = 0.5f;
 uniform int max_steps;
 uniform float count_check;
 uniform float far_plane;
@@ -62,7 +62,7 @@ uniform float resolution_y;
 //UV-coordinates-----------------------------
 in vec2 fragCoord; // image plane (-1,1)
 //-----------Noise Properties--------------
-const int octaves = 7;
+const int octaves = 6;
 const int ITR = max_steps;
 // const float FAR = 5.0;
 // const float dt = FAR/float(ITR);
@@ -215,12 +215,27 @@ float sphere_sdf( vec3 p, float s ) {
 }
 
 
+float dist_all(vec3 pos) {
+    vec4 fbm_noise = fbm_4(pos);
+    float sdf_noise  = fbm_noise.x  *0.5 +0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
+    float sdf_floor  = pos.y + 0.6;
+
+    //DIST 1
+    float dist_sphere = sphere_sdf(pos, 0.5f);
+    
+    //DIST 2
+    float dist_noise = sdf_floor + sdf_noise ;
+
+
+    return min(dist_noise,dist_sphere);
+}
 //Raymarches fractal brownian motion noise currently.
 void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative) {
 	
+    float min_dist = 0;
+    float step_size = 0;
 	vec3 pos = vec3(0);
     //Uses this for interpolation
-    float min_dist = 0;
     float dist_noise = 0;
     float sdf_noise = 0;
     float sdf_floor = 0;
@@ -228,6 +243,7 @@ void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative
     //Ground
     float dist_ground = 0;
     vec4 underground_noise = vec4(0);
+
 	// March.
 	for( int i = 0 ; i < ITR; i++ ) {
         // New position.
@@ -243,9 +259,10 @@ void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative
         //-------------------------------------------------------------
 
         // The distance to the noise.
-        vec4 fbm_noise = fbm_4(pos);
+        float mountain_noise_multiplier = 0.5;
+        vec4 fbm_noise = fbm_4(pos) * mountain_noise_multiplier;
 
-        sdf_noise  = fbm_noise.x * 0.5 + 0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
+        sdf_noise  = fbm_noise.x + 0.5 ; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
         // The floor distance function for noise 
         sdf_floor  = pos.y + 0.6;
         // Add the noise and floor for surface.
@@ -253,14 +270,6 @@ void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative
 
         //Noise surface was found
 		if ( dist_noise <= ground_threshold ) {
-
-            // TODO: Add some xtra steps for accuracy!
-            // for (int j = 0; j < 10; j++) {
-            //     //Interpolate for accuracy
-            //     float interpolated_dist = t - min_dist + 
-
-            //     ctr +=1;
-            // }
            
             //Derivative for the ground.
             vec3 derivative_floor = vec3(0,1,0);
@@ -274,16 +283,16 @@ void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative
         //---------Ground distance function-----------------------------
         //--------------------------------------------------------------
 
-        underground_noise = fbm_4(pos);
-        float dist_underground = underground_noise.x * 0.5 - 0.5; //Map [0,1]
+        underground_noise = fbm_4(pos) * mountain_noise_multiplier;
+        float dist_underground = underground_noise.x - 0.5; //Map [0,1]
 
         //Distance function of the ground
         dist_ground = pos.y + 1.1;
-
-        float dist =  dist_ground + 0.1 * dist_underground;
+        float ground_multiplier = 0.1;
+        float dist =  dist_ground + ground_multiplier* dist_underground;
         //Ground surface was found.
         if (dist_ground <= ground_threshold) {
-            derivative = normalize(vec3(0,1,0) + 0.1 * underground_noise.yzw) ;
+            derivative = normalize(vec3(0,1,0) + ground_multiplier * underground_noise.yzw) ;
             break;
         }
 
@@ -304,7 +313,8 @@ void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative
         min_dist = min(dist_ground, min(dist_noise,dist_sphere));
        	
         // Step forward the shortest distance seen.
-        t   += (min_dist - 0.999*ground_threshold)*0.6;
+        step_size = (min_dist - 0.999 * ground_threshold) * 0.6 ;
+        t   += step_size;
         ctr += 1.0;
 	}
 }
@@ -317,32 +327,6 @@ vec3 terrainNormal(vec3 v1) {
 	v2.y = v1.y;
 	v2.z = 1;
 	return normalize(v2);
-}
-
-
-/*//////////////////////////////////////////////////////
-///// Light calculation functions
-*///////////////////////////////////////////////////////
-
-float F(vec3 wi, vec3 n) {
-    //Calculate fresnel term F
-    float R0 = material_fresnel;
-    return R0 + (1.0 - R0) * pow(1.0 - dot(n, wi), 5.0);
-}
-
-float D(vec3 wi, vec3 wo, vec3 n) {
-    //Calculate microfacet distribution term D
-    vec3 wh = normalize(wi + wo);       //half-angle between inc- and out. directions
-    float s = material_shininess;
-    return ((s + 2) / (2 * PI)) * (pow(dot(n, wh), s));
-}
-
-float G(vec3 wi, vec3 wo, vec3 n) {
-    vec3 wh = normalize(wi + wo);       //half-angle between inc- and out. directions
-    //Calculate the masking term G
-    float term1 = dot(n, wh)*dot(n, wo) / dot(wo, wh);
-    float term2 = dot(n, wh)*dot(n, wi) / dot(wo, wh);
-    return min(1, min(2 * term1, 2 * term2));
 }
 
 vec3 calculateDirectIllumiunation(vec3 wo, vec3 n, vec3 light_dir, vec3 light_color, float light_intensity) {
@@ -358,30 +342,16 @@ vec3 calculateDirectIllumiunation(vec3 wo, vec3 n, vec3 light_dir, vec3 light_co
 }
 
 vec3 fog(in vec3 landscape_color, in float distance, in vec3 rayDir, in vec3 sunDir) {
-    float fog_intensity = 0.04;
+    float fog_intensity = 0.03;
     float fogAmount = 1.0 - exp(-distance * fog_intensity);
     //Is there sun or is it in shadow
     float sunAmount = max( dot(rayDir, sunDir), 0.0);
     //We want the fog to be affected by the intensity of the sunlight.
-    float sunIntensity = pow(sunAmount, 6.0);
-    vec3 fogColor = mix(sky_color, sun_color, sunIntensity);
+    float sun_bleed = pow(sunAmount, 8.0);
+    vec3 fogColor = mix(sky_color, sun_color, sun_bleed);
     return mix(landscape_color, fogColor, fogAmount);
 } 
 
-float dist_all(vec3 pos) {
-    vec4 fbm_noise = fbm_4(pos);
-    float sdf_noise  = fbm_noise.x * 0.5 + 0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
-    float sdf_floor  = pos.y + 0.6;
-
-    //DIST 1
-    float dist_sphere = sphere_sdf(pos, 0.5f);
-    
-    //DIST 2
-    float dist_noise = sdf_floor + sdf_noise ;
-
-
-    return min(dist_noise,dist_sphere);
-}
 
 float shadow( in vec3 ro, in vec3 directional_light, float maxt ) {
     float res = 1.0f;
@@ -416,6 +386,7 @@ void shade (vec3 ro, vec3 rd) {
     raymarch(ro, rd, ctr, t, derivative);
 
     float shadow_val = shadow(ro + rd * t, sun_dir, max_steps);
+    // shadow_val *= 0.8*exp(2);
     // The normal will be the max slope since we're using distance fields.
     vec3 normal = derivative.xyz; //terrainNormal(derivative);
     // Shade.
@@ -423,22 +394,22 @@ void shade (vec3 ro, vec3 rd) {
     //Degug lighing / Ambient occlusion?
 	// fragmentColor = vec4(1 - vec3(ctr / float(ITR)), 1.0)
     vec3 occlusion =  1 - vec3(ctr / float(ITR));
-    vec3 ambient_occl_deluxe = vec3(0.7*occlusion.x);
+    vec3 ambient_occl_deluxe = vec3(occlusion.x);
 
     vec3 wo =  -normalize(ro + rd * t);
     //Regular lighting
     vec3 colorSun = calculateDirectIllumiunation( wo, normal, sun_dir, sun_color, sun_intensity);
     vec3 colorInd = calculateDirectIllumiunation( wo, normal, indirect_dir, indirect_color, indirect_intensity);
-    vec3 color = colorSun; //+ 0.6*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));
+    vec3 color = colorSun;
     color *= shadow_val;
     color += colorInd;
     //Add the Sky.
     float sky = clamp(0.5 + 0.5 * normal.y, 0.0, 1.0);
-    vec3 lin = sky*sky_color*sky_intensity;
+    vec3 lin = sky * sky_color * sky_intensity;
 
-    color += lin*material_color; //+ 0.4*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));;
+    color += lin * material_color; //+ 0.4*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));;
     //Add fog
-    color *= ambient_occl_deluxe;
+    color *=  ambient_occl_deluxe;
     // color += 0.1*occlusion;
     color = fog(color, length(rd * t), rd, sun_dir);
     // + 0.6*vec3((ctr / float(ITR))*0.8, (ctr / float(ITR)),(ctr / float(ITR)));

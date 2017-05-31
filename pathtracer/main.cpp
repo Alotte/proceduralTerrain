@@ -33,7 +33,6 @@ vec3 forward	= vec3(0, 0, 1);
 ///////////////////////////////////////////////////////////////////////////////
 // Parameters for the raymarcher
 ///////////////////////////////////////////////////////////////////////////////
-float ground_threshold = 0.5f;
 float count_check = 0.0f;
 int max_steps = 120;
 float far_plane = 100.0f;
@@ -98,7 +97,6 @@ void display(void) {
 	labhelper::setUniformSlow(shaderProgram, "resolution_x", (float)windowWidth);
 	labhelper::setUniformSlow(shaderProgram, "resolution_y", (float)windowHeight);
 	labhelper::setUniformSlow(shaderProgram, "aspect_ratio", (float)windowWidth / windowHeight);
-	labhelper::setUniformSlow(shaderProgram, "ground_threshold", ground_threshold);
 	labhelper::setUniformSlow(shaderProgram, "max_steps", max_steps);
 	labhelper::setUniformSlow(shaderProgram, "count_check", count_check);	
 	labhelper::setUniformSlow(shaderProgram, "sun_dir", sun_dir);	
@@ -184,7 +182,6 @@ void gui() {
 	/////////////////////////////////////////////////////////////////////////////
 	if (ImGui::CollapsingHeader("Raymarching", "pathtracer_ch", true, true))
 	{
-		ImGui::SliderFloat("Ground Threshold", &ground_threshold, 0.01f, 1.0f);
 		ImGui::SliderFloat("Far Plane", &far_plane, 10.0f, 500.0f);
 		ImGui::SliderInt("Max Raymarcher Steps", &max_steps, 10, 1000);
 		ImGui::SliderFloat("Shadow softness", &soft_shadow_multiplier, 1, 128);
