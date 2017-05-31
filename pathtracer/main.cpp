@@ -34,9 +34,10 @@ vec3 forward	= vec3(0, 0, 1);
 // Parameters for the raymarcher
 ///////////////////////////////////////////////////////////////////////////////
 float count_check = 0.0f;
-int max_steps = 120;
+int max_steps = 240;
 float far_plane = 100.0f;
 Material terrain_mat;
+float iGlobalTime = 0;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Lighting
@@ -50,6 +51,7 @@ vec3 sky_dir = vec3(0,-1,0);
 vec3 sky_color = vec3(0,0.8,0.2);
 float sky_intensity = 0.2;
 float soft_shadow_multiplier = 32.0f;
+float sun_height = 0.67;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Load shaders, environment maps, models and so on
@@ -110,6 +112,8 @@ void display(void) {
 	labhelper::setUniformSlow(shaderProgram, "material_color", terrain_mat.material_color);
 	labhelper::setUniformSlow(shaderProgram, "far_plane", far_plane);
 	labhelper::setUniformSlow(shaderProgram, "soft_shadow_multiplier", soft_shadow_multiplier);
+	labhelper::setUniformSlow(shaderProgram, "iGlobalTime", iGlobalTime);
+	labhelper::setUniformSlow(shaderProgram, "sun_height", sun_height);
 	// labhelper::setUniformSlow(shaderProgram, "amplitude", noise_amplitude);
 
 	labhelper::drawFullScreenQuad();
@@ -185,6 +189,7 @@ void gui() {
 		ImGui::SliderFloat("Far Plane", &far_plane, 10.0f, 500.0f);
 		ImGui::SliderInt("Max Raymarcher Steps", &max_steps, 10, 1000);
 		ImGui::SliderFloat("Shadow softness", &soft_shadow_multiplier, 1, 128);
+		ImGui::SliderFloat("Sun Height", &sun_height, 0, 1);
 	}
 
 	// Render the GUI.
@@ -200,6 +205,9 @@ int main(int argc, char *argv[]) {
 	auto startTime = std::chrono::system_clock::now();
 
 	while (!stopRendering) {
+		//update global time
+		std::chrono::duration<float> timeSinceStart = std::chrono::system_clock::now() - startTime;
+		iGlobalTime = timeSinceStart.count();
 		// render to window
 		display();
 

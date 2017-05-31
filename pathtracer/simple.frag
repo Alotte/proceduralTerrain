@@ -26,13 +26,14 @@ uniform float material_fresnel;
 uniform float material_shininess;
 uniform float material_emission;
 uniform float soft_shadow_multiplier;
+uniform float sun_height;
 
 //---------Constants-----------------------------
 #define PI 3.14159265359
 //---------First light---------------------------
 //vec3 sun_dir = vec3(0,-1, 0.4);
-vec3 sun_dir = vec3(0.624695,0.2,0.624695);
-vec3 sun_color = vec3(1.0,0.89, 0.76);
+vec3 sun_dir = vec3(0.624695,sun_height,0.624695);
+vec3 sun_color = vec3(1.0, 1- (1 - sun_height), 1-(1-sun_height));
 float sun_intensity = 1.4;
 //---------Second light---------------------------
 vec3 sky_dir = vec3(0, 1, 0);
@@ -58,11 +59,13 @@ float f = 1.67f; //focal length
 uniform float aspect_ratio;
 uniform float resolution_x;
 uniform float resolution_y;
+uniform float iGlobalTime;
+
 
 //UV-coordinates-----------------------------
 in vec2 fragCoord; // image plane (-1,1)
 //-----------Noise Properties--------------
-const int octaves = 6;
+const int octaves = 7;
 const int ITR = max_steps;
 // const float FAR = 5.0;
 // const float dt = FAR/float(ITR);
@@ -217,7 +220,7 @@ float sphere_sdf( vec3 p, float s ) {
 
 float dist_all(vec3 pos) {
     vec4 fbm_noise = fbm_4(pos);
-    float sdf_noise  = fbm_noise.x  *0.5 +0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
+    float sdf_noise  = fbm_noise.x +0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
     float sdf_floor  = pos.y + 0.6;
 
     //DIST 1
@@ -260,7 +263,7 @@ void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative
 
         // The distance to the noise.
         float mountain_noise_multiplier = 0.5;
-        vec4 fbm_noise = fbm_4(pos) * mountain_noise_multiplier;
+        vec4 fbm_noise = fbm_4(pos);
 
         sdf_noise  = fbm_noise.x + 0.5 ; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
         // The floor distance function for noise 
@@ -313,7 +316,7 @@ void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative
         min_dist = min(dist_ground, min(dist_noise,dist_sphere));
        	
         // Step forward the shortest distance seen.
-        step_size = (min_dist - 0.999 * ground_threshold) * 0.6 ;
+        step_size = (min_dist - 0.999 * ground_threshold) * 0.34 ;
         t   += step_size;
         ctr += 1.0;
 	}
@@ -347,8 +350,8 @@ vec3 fog(in vec3 landscape_color, in float distance, in vec3 rayDir, in vec3 sun
     //Is there sun or is it in shadow
     float sunAmount = max( dot(rayDir, sunDir), 0.0);
     //We want the fog to be affected by the intensity of the sunlight.
-    float sun_bleed = pow(sunAmount, 8.0);
-    vec3 fogColor = mix(sky_color, sun_color, sun_bleed);
+    float sun_bleed = pow(sunAmount, 6.0);
+    vec3 fogColor = mix(sky_color * (sun_height+0.01), sun_color, sun_bleed);
     return mix(landscape_color, fogColor, fogAmount);
 } 
 
@@ -366,7 +369,7 @@ float shadow( in vec3 ro, in vec3 directional_light, float maxt ) {
         float dist_noise = dist_all(pos);
 
 
-        if( dist_noise < 0.99*ground_threshold) {
+        if( dist_noise < 0.999*ground_threshold) {
             return 0;
         }
 
@@ -386,7 +389,7 @@ void shade (vec3 ro, vec3 rd) {
     raymarch(ro, rd, ctr, t, derivative);
 
     float shadow_val = shadow(ro + rd * t, sun_dir, max_steps);
-    // shadow_val *= 0.8*exp(2);
+    shadow_val *= 0.5*exp(2);
     // The normal will be the max slope since we're using distance fields.
     vec3 normal = derivative.xyz; //terrainNormal(derivative);
     // Shade.
