@@ -143,7 +143,7 @@ bool handleEvents(void) {
 				float rotationSpeed = 0.005f;
 				mat4 yaw = rotate(rotationSpeed * -delta_x, worldUp);
 				mat4 pitch = rotate(rotationSpeed * -delta_y, normalize(cross(forward, worldUp)));
-				forward = vec3(pitch * yaw * vec4(forward, 0.0f));
+				forward = normalize(vec3(pitch * yaw * vec4(forward, 0.0f)));
 			}
 			prev_xcoord = event.motion.x;
 			prev_ycoord = event.motion.y;
@@ -152,7 +152,7 @@ bool handleEvents(void) {
 
 	// check keyboard state (which keys are still pressed)
 	const uint8_t *state = SDL_GetKeyboardState(nullptr);
-	right = cross(forward, worldUp);
+	right = normalize(cross(forward, worldUp));
 
 	if (state[SDL_SCANCODE_W]) {
 		eye += speed* forward;
