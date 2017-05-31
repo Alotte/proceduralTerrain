@@ -62,7 +62,7 @@ uniform float resolution_y;
 //UV-coordinates-----------------------------
 in vec2 fragCoord; // image plane (-1,1)
 //-----------Noise Properties--------------
-const int octaves = 8;
+const int octaves = 7;
 const int ITR = max_steps;
 // const float FAR = 5.0;
 // const float dt = FAR/float(ITR);
@@ -244,11 +244,12 @@ void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative
 
         // The distance to the noise.
         vec4 fbm_noise = fbm_4(pos);
+
         sdf_noise  = fbm_noise.x * 0.5 + 0.5; // Four layers of noise.. mapped from (-1, 1) -> (0,1)
         // The floor distance function for noise 
         sdf_floor  = pos.y + 0.6;
         // Add the noise and floor for surface.
-        dist_noise    = sdf_floor + sdf_noise ;
+        dist_noise    = sdf_floor + sdf_noise;
 
         //Noise surface was found
 		if ( dist_noise <= ground_threshold ) {
@@ -303,7 +304,7 @@ void raymarch(vec3 ro, vec3 rd, out float ctr,  out float t, out vec3 derivative
         min_dist = min(dist_ground, min(dist_noise,dist_sphere));
        	
         // Step forward the shortest distance seen.
-        t   += (min_dist - 0.979*ground_threshold);
+        t   += (min_dist - 0.999*ground_threshold)*0.6;
         ctr += 1.0;
 	}
 }
@@ -382,19 +383,27 @@ float dist_all(vec3 pos) {
     return min(dist_noise,dist_sphere);
 }
 
-float shadow( in vec3 ro, in vec3 rd, float maxt ) {
+float shadow( in vec3 ro, in vec3 directional_light, float maxt ) {
     float res = 1.0f;
+    float sun_distance = 50;
+    vec3 sun_position = directional_light * sun_distance;
+    vec3 rd = normalize(sun_position - ro);
     vec3 pos = vec3(0);
-
-    for( float t = 0.3f; t < maxt; ) {
+    int b = 0;
+    for( float t = 0.1f; t < maxt; ) {
         pos = ro + rd * t;
+
         float dist_noise = dist_all(pos);
 
-        if( dist_noise < 0.97*ground_threshold) {
+
+        if( dist_noise < 0.99*ground_threshold) {
             return 0;
         }
-        res = min (res, soft_shadow_multiplier * dist_noise / t);
+
+        res = min (res, soft_shadow_multiplier * (dist_noise-0.99*ground_threshold) / t);
         t += dist_noise;
+        b++;
+        if (b > 1000) break;
     }
     return res;
 }
@@ -406,7 +415,7 @@ void shade (vec3 ro, vec3 rd) {
   	float t = 0;
     raymarch(ro, rd, ctr, t, derivative);
 
-    float shadow_val = shadow(ro + rd * t, sun_dir, 4000);
+    float shadow_val = shadow(ro + rd * t, sun_dir, max_steps);
     // The normal will be the max slope since we're using distance fields.
     vec3 normal = derivative.xyz; //terrainNormal(derivative);
     // Shade.
@@ -414,7 +423,7 @@ void shade (vec3 ro, vec3 rd) {
     //Degug lighing / Ambient occlusion?
 	// fragmentColor = vec4(1 - vec3(ctr / float(ITR)), 1.0)
     vec3 occlusion =  1 - vec3(ctr / float(ITR));
-    vec3 ambient_occl_deluxe = vec3(pow(occlusion.x,2.0));
+    vec3 ambient_occl_deluxe = vec3(0.7*occlusion.x);
 
     vec3 wo =  -normalize(ro + rd * t);
     //Regular lighting
